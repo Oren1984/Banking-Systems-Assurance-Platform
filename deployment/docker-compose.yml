@@ -1,0 +1,29 @@
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: banking_assurance_db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set, no default}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set, no default}
+      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set, no default}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Phase 1 scope: only the database service is defined. `api` and `ui`
+# services are added once app/main.py and ui/ have real Phase 2+ content —
+# adding them now against empty/placeholder code would violate "do not
+# populate later-phase modules with fake implementations."
+#
+# Chroma requires no server (PersistentClient writes to
+# CHROMA_PERSIST_DIRECTORY on the same host/container filesystem as the
+# app), so it has no service entry here — only a local directory.
+
+volumes:
+  postgres_data:

@@ -1,0 +1,25 @@
+# Banking Systems Assurance Platform — root .gitignore
+# Applies to the new unified platform code at the repo root. The three
+# legacy source repositories (RAG-Engineering-Lab/, ai-project-control-tower/,
+# AI-Project-Scope-Guard/) each retain their own .gitignore and are untouched.
+
+# Secrets — never commit a real .env
+.env
+*.env
+!.env.example
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Local data / vector persistence (never commit banking-sensitive local state)
+data/
+mock_banking_system/**/*.local
+
+# OS
+.DS_Store
+Thumbs.db

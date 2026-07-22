@@ -1,0 +1,40 @@
+# Banking Systems Assurance Platform — dependencies.
+# Reconciled from the three source repositories' requirements.txt files
+# (see BANKING_PLATFORM_INTEGRATION_PLAN.md §15: "Three separate
+# requirements.txt files -> Merge into one reconciled dependency set").
+# No external AI provider SDKs (openai, google-generativeai, anthropic) are
+# listed here — they belong to Phase 6 and must stay optional / not
+# required for local-only startup.
+
+# --- Web / API --------------------------------------------------------
+# fastapi/starlette bumped in Phase 2 (from >=0.110) because installing
+# streamlit (below) pulled in starlette>=0.40, which fastapi 0.110's
+# pinned starlette<0.39 range rejects. Pinned here to the resolved,
+# verified-working combination (see PHASE_2_COMPLETION_REPORT.md).
+fastapi>=0.139
+httpx>=0.27          # required by fastapi.testclient.TestClient
+
+# --- UI (ui/streamlit_app.py, Phase 2 minimal workflow) -------------------
+streamlit>=1.60
+
+# --- Configuration / validation -----------------------------------------
+pydantic>=2.6
+pydantic-settings>=2.2
+python-dotenv>=1.0
+
+# --- Persistence: PostgreSQL + pgvector (primary backend) ----------------
+sqlalchemy>=2.0
+alembic>=1.13
+psycopg2-binary>=2.9
+
+# --- Vector store: Chroma (secondary/local backend) -----------------------
+chromadb>=0.5
+
+# --- Logging ---------------------------------------------------------------
+structlog>=24.1
+
+# --- Numerics (used by rag/embeddings/mock_embedding_provider.py when present)
+numpy>=1.26
+
+# --- Testing -----------------------------------------------------------------
+pytest>=8.0

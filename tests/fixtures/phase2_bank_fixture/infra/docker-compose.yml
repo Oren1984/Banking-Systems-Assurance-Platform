@@ -1,0 +1,9 @@
+# SYNTHETIC TEST FIXTURE — fake deployment config, not real.
+services:
+  fake-api:
+    environment:
+      DEBUG: true
+      SSL_VERIFY: false
+      ALLOW_ANONYMOUS: true
+    ports:
+      - "0.0.0.0:8000:8000"

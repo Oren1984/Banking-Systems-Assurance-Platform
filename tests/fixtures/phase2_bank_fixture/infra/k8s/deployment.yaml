@@ -1,0 +1,8 @@
+# SYNTHETIC TEST FIXTURE — fake k8s config, not real.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fake-config
+data:
+  allow_anonymous: "true"
+  public: "true"
