@@ -1,4 +1,4 @@
-# Security Boundaries — Phase 1 + Phase 2 Snapshot
+# Security Boundaries — Phase 1–6 Snapshot
 
 Full security/privacy/governance analysis and the consolidated findings table live in
 `BANKING_PLATFORM_INTEGRATION_PLAN.md` §10. This document tracks only what has actually been
@@ -82,12 +82,16 @@ It does **not** detect names, addresses, or free-text account references. Do not
 output as guaranteed PII-free in any context — see the module docstring and
 `tests/security/test_pii_redaction.py::test_documented_as_non_exhaustive`.
 
-## Prompt-injection defense — advisory only
+## Prompt-injection defense — advisory by default, hard gate for the agent boundary (Phase 6)
 
 `governance/prompt_safety.py::check_prompt_safety()` defaults to advisory (`enforce=False`):
-it flags suspicious patterns but does not block a query. An `enforce=True` hard-gate mode
-exists as an extension point but nothing in Phase 1 calls it that way yet (no LLM-facing
-pipeline exists in Phase 1 to gate).
+it flags suspicious patterns but does not block a query. An `enforce=True` hard-gate mode has
+existed as a documented extension point since Phase 1; it went unused until Phase 6, where
+`agents/sanitizer.py::build_question_context()` — the only free-text-question entry point in
+the platform — calls it with `enforce=True`. A matched pattern (e.g. "ignore previous
+instructions") raises `GovernanceError` and the question is rejected outright, never merely
+warned about — verified by `tests/unit/test_agent_sanitizer.py::test_build_question_context_rejects_a_prompt_injection_attempt`
+and, through the UI, by `tests/unit/test_streamlit_app_smoke.py::test_asking_an_unsafe_question_shows_an_error_not_a_crash`.
 
 ## External provider isolation
 
@@ -97,14 +101,108 @@ pipeline exists in Phase 1 to gate).
   per-provider flag, non-empty API key) before returning anything other than `None` — verified
   by `tests/unit/test_provider_registry.py`.
 - `providers/{openai,gemini,claude}_adapter.py` fail fast at construction if given an empty
-  key, never log the key (`__repr__` redacts it), and lazy-import the vendor SDK only inside
-  `send()` (not implemented in Phase 1 — raises `NotImplementedError`). No provider SDK
-  (`openai`, `anthropic`, `google-generativeai`) is installed or required for local startup —
-  verified by `tests/isolation/test_no_sdk_required_for_local_startup.py`.
+  key, never log the key (`__repr__` redacts it), and never import a network-client library or
+  vendor SDK, lazily or otherwise — `send()` always raises `NotImplementedError`, a deliberate
+  Phase 6 scope boundary (see `providers/README.md`), not a missed implementation. No provider
+  SDK (`openai`, `anthropic`, `google-generativeai`) is installed or required for local
+  startup — verified by `tests/isolation/test_no_sdk_required_for_local_startup.py`.
 - `tests/isolation/test_no_network_imports_outside_providers.py` statically verifies that no
-  module outside `providers/` imports a network-client library
-  (`requests`, `httpx`, `openai`, `anthropic`, `google.generativeai`, etc.) anywhere in the
-  new platform's own code.
+  module outside `providers/` — including `agents/`, the Phase 6 boundary that orchestrates
+  `providers/` — imports a network-client library (`requests`, `httpx`, `openai`, `anthropic`,
+  `google.generativeai`, etc.) anywhere in the new platform's own code.
+
+## Optional agent boundary (Phase 6)
+
+See `docs/agent_guide.md` for the full picture (setup, configuration, cost, limitations). In
+summary:
+
+- `AGENT_ENABLED=false` by default; even when enabled, `AGENT_PROVIDER=local` is the default —
+  four separate, explicit conditions must all hold before `agents/registry.py::get_agent_provider()`
+  ever returns an external adapter (see that module's own docstring).
+- Every agent context passes through `agents/sanitizer.py` before anything else happens:
+  `governance/report_sanitizer.py::sanitize_report()` (secret masking + auto-fix stripping),
+  then `governance/pii_redaction.py::redact_pii()`, then a hard character limit
+  (`AGENT_MAX_CONTEXT_CHARS`, default 4000) and item-count limit (`AGENT_MAX_EVIDENCE_ITEMS`,
+  default 5) — never an entire repository, never a raw source file.
+- A provider failure (including the `NotImplementedError` every adapter's `send()` currently
+  raises) always falls back to the local, deterministic agent mode —
+  `agents/agent_service.py::_run()` never lets an exception from this boundary propagate into
+  the deterministic assessment pipeline.
+- Agent actions are audited exactly like every other governance action (one `AuditEvent` per
+  action, metadata only — see `storage/db/models/audit_event.py`) but never write to a
+  `Finding`, `Score`, `ControlEvaluation`, or `Recommendation` row — verified by
+  `tests/unit/test_agent_ui_service.py::test_agent_actions_do_not_change_deterministic_findings_or_scores`
+  and `::test_agent_actions_do_not_change_finalization_status`.
+- End-to-end secret-leakage proof: `tests/security/test_agent_no_secret_leakage.py` runs a full
+  assessment against a fixture containing a real-looking (synthetic) secret, triggers every
+  agent action including against a "configured" external provider, and asserts the raw secret
+  never appears in application logs, the persisted audit trail, or the response returned to
+  the UI.
+
+## Read-only enforcement extended to the assessment layer (Phase 4)
+
+`assessment/engine.py::run_assessment()` orchestrates `ScanRepository`, `ScoringRepository`,
+`ControlEvaluationRepository`, and `AuditRepository` — none of which have any filesystem access
+to the scanned target; the only filesystem interaction in the entire pipeline remains
+`scanners/source_ingestion.py`, unchanged from Phase 2. Verified by
+`tests/security/test_assessment_no_source_modification.py`, which extends Phase 2's
+hash-comparison proof to a full `run_assessment()` call, not just the raw scanner.
+
+## Human-in-the-loop governance (Phase 4)
+
+- `governance/approval_workflow.py` validates every review/override decision before it can be
+  applied — `storage/db/repositories.py::GovernanceRepository` never persists an unvalidated
+  transition. A finding's `human_review_status` can only move to `approved`, `rejected`, or
+  `overridden` via an explicit reviewer action (never back to `pending`); an `overridden`
+  outcome and every score override require a non-empty, recorded reason.
+- `check_finalization_policy()` blocks an assessment from being treated as final while any
+  domain scored `high_risk`/`critical_risk` still has a finding pending human review — verified
+  by `tests/unit/test_approval_workflow.py` and `tests/unit/test_governance_repository.py`.
+- Score overrides never mutate history: `GovernanceRepository.override_score()` always inserts a
+  **new** `Score` row linked via `override_of`, leaving the original deterministic-engine result
+  intact and queryable.
+- `storage/db/models/audit_event.py`'s `audit_events` table is append-only by construction — no
+  update or delete method exists anywhere in this codebase for it. Every governance-relevant
+  action (scan persisted, scoring completed, control evaluation completed, assessment
+  completed, finding reviewed, score overridden) is recorded via
+  `governance/audit_trail.py::build_audit_event()`, which sanitizes every free-text
+  summary/payload value through the same `governance/report_sanitizer.py` used for human-facing
+  reports before the row is ever constructed — verified by `tests/unit/test_audit_trail.py`
+  (raw-secret-in-summary and nested-payload sanitization cases) and
+  `tests/unit/test_assessment_engine.py::test_run_assessment_never_leaks_the_raw_secret_anywhere`.
+- `governance/retention.py` is identify-only: it can name which of the platform's own persisted
+  scans are older than a configured `data_retention_days` (default `None` — disabled), but no
+  code path anywhere in this codebase deletes anything as a result. See the module's own
+  docstring for what remains a deliberately open decision for a later phase.
+
+## Mock banking system: no real data, and self-contamination avoided (Phase 5)
+
+`mock_banking_system/` contains only synthetic, deliberately-shaped placeholder values —
+verified by `tests/unit/test_mock_banking_fixture.py::test_no_real_secret_shaped_values_are_present_in_the_fixture`
+and by every export/report test asserting the specific fake values never appear in generated
+output. A real bug was found and fixed during this phase: generated assessment reports were
+initially written to `mock_banking_system/sample_exports/`, which is itself inside the scanned
+tree — the report's own content (rule ids, recommendation text, masked evidence) then became
+new scan input on the next run, silently inflating and destabilizing the fixture's finding
+count. Fixed by writing all sample exports under `Settings.report_output_dir`
+(`data/reports/mock_banking_demo/` by default) instead — never inside a scanned target. See
+`mock_banking_system/README.md`'s "Hard rules" and `scripts/seed_mock_banking_demo.py`'s own
+module docstring.
+
+## Config bug found and fixed during Phase 5: `ALLOWED_SCAN_PATHS` via a real environment variable
+
+`core/config.py::Settings.allowed_scan_paths` has always had a `mode="before"` validator
+(`_parse_scan_paths`) written to accept a comma-separated string. That validator never actually
+ran when the value came from a real OS environment variable: pydantic-settings' env source
+attempts to JSON-decode any non-scalar-typed field before model validators run, and a plain
+string like `mock_banking_system` is not valid JSON — the result was a hard `SettingsError`
+crash at `Settings()` construction, not a graceful fallback. Every existing test constructed
+`Settings(allowed_scan_paths=[...])` directly (bypassing the env source entirely), so this path
+had never been exercised until Phase 5's own demo UI was run against a real environment
+variable. Fixed by annotating the field `Annotated[list[str], NoDecode]` (pydantic-settings'
+documented escape hatch for exactly this case). Verified by
+`tests/unit/test_config_defaults.py`'s existing coverage plus a new regression assertion; see
+`PHASE_5_COMPLETION_REPORT.md` for the full account.
 
 ## Access control — unresolved gap, unchanged from the audit
 

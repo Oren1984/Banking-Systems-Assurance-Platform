@@ -22,25 +22,37 @@ def get_provider(name: str, settings: Settings) -> Optional[ProviderAdapter]:
     if not settings.external_providers_enabled:
         return None
 
+    # model/timeout/max_retries are read from the agent_* settings because
+    # the optional agent boundary (agents/) is, as of Phase 6, this
+    # registry's only caller — see agents/registry.py, which sits one
+    # layer above this function. A future non-agent caller of this
+    # registry could pass distinct values by constructing an adapter
+    # directly instead of through get_provider().
+    kwargs = dict(
+        model=settings.agent_model_name,
+        timeout_seconds=settings.agent_timeout_seconds,
+        max_retries=settings.agent_max_retries,
+    )
+
     if name == "openai":
         if not (settings.openai_enabled and settings.openai_api_key):
             return None
         from providers.openai_adapter import OpenAIAdapter
 
-        return OpenAIAdapter(api_key=settings.openai_api_key)
+        return OpenAIAdapter(api_key=settings.openai_api_key, **kwargs)
 
     if name == "gemini":
         if not (settings.gemini_enabled and settings.gemini_api_key):
             return None
         from providers.gemini_adapter import GeminiAdapter
 
-        return GeminiAdapter(api_key=settings.gemini_api_key)
+        return GeminiAdapter(api_key=settings.gemini_api_key, **kwargs)
 
     if name == "claude":
         if not (settings.claude_enabled and settings.claude_api_key):
             return None
         from providers.claude_adapter import ClaudeAdapter
 
-        return ClaudeAdapter(api_key=settings.claude_api_key)
+        return ClaudeAdapter(api_key=settings.claude_api_key, **kwargs)
 
     return None

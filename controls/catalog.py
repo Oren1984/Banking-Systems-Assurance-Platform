@@ -164,3 +164,38 @@ def control_for_rule_id(rule_id: str) -> ControlDefinition | None:
         if rule_id.startswith(definition.rule_prefix):
             return definition
     return None
+
+
+def applies_to_domain(definition: ControlDefinition, domain: str) -> bool:
+    """
+    Phase 4 — whether a catalog control applies to a given
+    `core.domains.BankingDomain` value, per the precedence
+    `storage/db/models/control.py` documents for its own
+    `applies_to_domains` column:
+
+    1. If `applies_to_domains` is non-empty, the control applies only to
+       those listed domains.
+    2. Else, if `domain` is set, the control applies only to that single
+       domain.
+    3. Else (both empty — e.g. CTRL-SECRET-001, CTRL-PII-001,
+       CTRL-LOG-001, CTRL-SKIP-001), the control is cross-cutting and
+       applies to every domain.
+
+    Used by assessment/evaluators/control_evaluator.py to determine which
+    controls to evaluate per domain, and by the knowledge_base/controls/
+    manifest generator to document per-domain coverage.
+    """
+    if definition.applies_to_domains:
+        return domain in definition.applies_to_domains
+    if definition.domain is not None:
+        return domain == definition.domain
+    return True
+
+
+def controls_for_domain(domain: str) -> List[ControlDefinition]:
+    """All catalog controls that apply to a given domain, per
+    `applies_to_domain()`. Every one of the 16 approved domains has at
+    least one applicable control today — the four cross-cutting controls
+    apply universally — verified by
+    tests/unit/test_knowledge_base_manifest.py."""
+    return [d for d in CONTROL_CATALOG if applies_to_domain(d, domain)]

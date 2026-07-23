@@ -1,0 +1,9 @@
+# SYNTHETIC MOCK BANKING SYSTEM — fake k8s config, not real.
+# Deliberately planted finding — see docs/mock_banking_planted_findings.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mock-bank-config
+data:
+  allow_anonymous: true
+  # expect PERM-005 (anonymous access explicitly allowed)

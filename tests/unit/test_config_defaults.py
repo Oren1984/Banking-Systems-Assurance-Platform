@@ -76,3 +76,29 @@ def test_allowed_scan_paths_defaults_empty():
 def test_allowed_scan_paths_parses_comma_separated():
     s = Settings(_env_file=None, allowed_scan_paths="/a,/b, /c")
     assert s.allowed_scan_paths == ["/a", "/b", "/c"]
+
+
+def test_allowed_scan_paths_parses_a_real_environment_variable(monkeypatch):
+    # Regression test (Phase 5): a plain-string ALLOWED_SCAN_PATHS env var
+    # used to crash with pydantic_settings.SettingsError at construction —
+    # pydantic-settings' env source tried to JSON-decode it before this
+    # model's own comma-parsing validator ever ran. The two tests above
+    # both construct Settings with allowed_scan_paths= as a direct kwarg,
+    # which bypasses the env source entirely and never exercised this path.
+    # Fixed via Annotated[list[str], NoDecode] on the field — see
+    # core/config.py and docs/security_boundaries.md.
+    monkeypatch.setenv("ALLOWED_SCAN_PATHS", "mock_banking_system,/tmp/other")
+    s = Settings(_env_file=None)
+    assert s.allowed_scan_paths == ["mock_banking_system", "/tmp/other"]
+
+
+def test_mock_banking_system_path_uses_exact_allowlisted_fixture_path():
+    s = Settings(_env_file=None, allowed_scan_paths=["/scan-targets/mock_banking_system"])
+    assert s.mock_banking_system_path == "/scan-targets/mock_banking_system"
+
+
+def test_mock_banking_system_path_discovers_fixture_under_allowed_repo_root(tmp_path):
+    fixture = tmp_path / "mock_banking_system"
+    fixture.mkdir()
+    s = Settings(_env_file=None, allowed_scan_paths=[str(tmp_path)])
+    assert s.mock_banking_system_path == str(fixture)

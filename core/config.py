@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from typing import Literal, Optional
+from pathlib import Path
+from typing import Annotated, Literal, Optional
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 VectorBackend = Literal["pgvector", "chroma"]
 Environment = Literal["local", "dev", "staging", "prod"]
@@ -13,6 +14,7 @@ Environment = Literal["local", "dev", "staging", "prod"]
 # default (`postgresql://control_tower:control_tower_pass@...`, see
 # BANKING_PLATFORM_INTEGRATION_PLAN.md §10 finding #4) into the new platform.
 _FORBIDDEN_CREDENTIAL_FRAGMENTS = ("control_tower_pass",)
+_DEFAULT_MOCK_BANKING_SYSTEM_PATH = "mock_banking_system"
 
 
 class Settings(BaseSettings):
@@ -73,7 +75,19 @@ class Settings(BaseSettings):
     embedding_provider: str = "local"
 
     # --- Scanning boundary (fail-closed if empty; see scanners/path_validator.py)
-    allowed_scan_paths: list[str] = Field(default_factory=list)
+    # `NoDecode` is required here: pydantic-settings' env source otherwise
+    # attempts to JSON-decode any non-scalar-typed field read from an
+    # environment variable *before* this model's own `_parse_scan_paths`
+    # validator ever runs — a plain comma-separated string (the format
+    # .env.example documents and _parse_scan_paths is written to accept)
+    # is not valid JSON, so without NoDecode, setting ALLOWED_SCAN_PATHS as
+    # an actual environment variable crashes with a SettingsError before
+    # construction completes. Found running the Phase 5 demo UI against a
+    # real environment variable, not merely a constructor kwarg (every
+    # existing test constructed Settings with allowed_scan_paths= directly,
+    # which bypasses the env source entirely and never exercised this
+    # path) — see PHASE_5_COMPLETION_REPORT.md.
+    allowed_scan_paths: Annotated[list[str], NoDecode] = Field(default_factory=list)
     max_scan_file_size_bytes: int = 1_048_576  # 1 MB, per file
     max_scan_total_size_bytes: int = 209_715_200  # 200 MB, whole scan
     max_scan_file_count: int = 20_000
@@ -89,6 +103,36 @@ class Settings(BaseSettings):
     # --- Storage paths -----------------------------------------------------
     document_storage_dir: str = "data/documents"
     report_output_dir: str = "data/reports"
+
+    # --- Retention foundations (governance/retention.py) --------------------
+    # None = retention identification disabled by default; a platform
+    # operator must explicitly opt in. See governance/retention.py's module
+    # docstring for what this does and, just as importantly, does not do.
+    data_retention_days: Optional[int] = Field(default=None, ge=0)
+
+    # --- Optional external-agent boundary (agents/, Phase 6) -----------------
+    # AGENT_ENABLED is a separate, higher-level switch from
+    # EXTERNAL_PROVIDERS_ENABLED: an operator can enable the agent *feature*
+    # (agents/registry.py will still only ever hand back the deterministic
+    # local mode, never silently reach for openai/gemini/claude) without
+    # also opting into real external transmission. Both this flag AND
+    # agent_provider != "local" AND external_providers_enabled AND the
+    # specific provider's own enable flag/API key must all hold before
+    # agents/registry.py::get_agent_provider() returns anything external —
+    # see that module's own docstring for the exact precedence.
+    agent_enabled: bool = False
+    agent_provider: Literal["local", "openai", "gemini", "claude"] = "local"
+    agent_model_name: Optional[str] = None
+    agent_timeout_seconds: float = 30.0
+    agent_max_retries: int = 1
+    # Hard cap on sanitized context sent to any provider (local or
+    # external) — enforced by agents/sanitizer.py, independent of whatever
+    # limit a specific provider's own API might additionally impose.
+    agent_max_context_chars: int = 4000
+    # Hard cap on how many findings/evidence snippets one agent context may
+    # include — prevents a "summarize everything" request from silently
+    # growing into a near-full-repository payload.
+    agent_max_evidence_items: int = 5
 
     @field_validator("database_url")
     @classmethod
@@ -113,6 +157,22 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [p.strip() for p in v.split(",") if p.strip()]
         return []
+
+    @property
+    def mock_banking_system_path(self) -> str:
+        """Return the configured source path for the built-in mock demo."""
+        for allowed_path in self.allowed_scan_paths:
+            normalized = allowed_path.replace("\\", "/").rstrip("/")
+            if normalized.endswith("/mock_banking_system") or normalized == _DEFAULT_MOCK_BANKING_SYSTEM_PATH:
+                return allowed_path.rstrip("\\/")
+            if normalized.endswith("/scan-targets") or normalized == "/scan-targets":
+                return f"{normalized}/mock_banking_system"
+
+            candidate = Path(allowed_path) / "mock_banking_system"
+            if candidate.exists():
+                return str(candidate)
+
+        return _DEFAULT_MOCK_BANKING_SYSTEM_PATH
 
 
 def get_settings() -> Settings:

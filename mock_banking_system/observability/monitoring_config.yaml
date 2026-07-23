@@ -1,0 +1,8 @@
+# SYNTHETIC MOCK BANKING SYSTEM — fake monitoring/observability config, not real.
+# Deliberate NEGATIVE example: no insecure settings.
+# Expect: no findings from this file.
+monitoring:
+  scrape_interval: 15s
+  targets:
+    - api:9090
+    - payments:9090

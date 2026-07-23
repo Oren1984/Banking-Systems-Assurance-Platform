@@ -1,0 +1,6 @@
+# SYNTHETIC MOCK BANKING SYSTEM — fake API route exposure config, not real.
+# Deliberately planted finding — see docs/mock_banking_planted_findings.md.
+paths:
+  /accounts/export:
+    public: true
+    # expect PERM-004 (public access flag set to true)

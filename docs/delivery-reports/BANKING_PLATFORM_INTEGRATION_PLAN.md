@@ -1,13 +1,18 @@
 # Banking Systems Assurance Platform — Integration Plan
 
-**Status:** Revised and approved in principle. Phase 1 ("Unified Foundation") and Phase 2
-("Banking Source Ingestion and Read-Only Scanning Engine") are both implemented — see
-`PHASE_1_COMPLETION_REPORT.md` and `PHASE_2_COMPLETION_REPORT.md` for exactly what exists,
-what was tested, and what remains open. Phases 3–6 are planning only; no code for them has
-been written. The three source repositories (`RAG-Engineering-Lab`, `ai-project-control-tower`,
+**Status:** Revised and approved in principle. All six phases are implemented — Phase 1
+("Unified Foundation"), Phase 2 ("Banking Source Ingestion and Read-Only Scanning Engine"),
+Phase 3 ("Assessment, Evidence, and Scoring"), Phase 4 ("Complete Banking Domain and
+Governance Layer"), Phase 5 ("UI, Mock System, and Demonstration Workflow"), and Phase 6
+("Final Documentation, Repository Cleanup, Packaging, and Optional Agent Infrastructure" —
+scope revised at execution time from this document's original "Optional External Providers"
+framing; see §13's Phase 6 entry) — see `PHASE_1_COMPLETION_REPORT.md` through
+`PHASE_6_COMPLETION_REPORT.md` for exactly what each phase delivered, what was tested, and
+what remains open. This was the project's final planned phase; no further phase is scheduled.
+The three source repositories (`RAG-Engineering-Lab`, `ai-project-control-tower`,
 `AI-Project-Scope-Guard`) remain unmodified, unmoved, undeleted, and unmerged throughout —
 verified by a hash-comparison test, see `tests/e2e/test_original_repos_not_modified.py`
-(re-run and re-verified at the end of Phase 2 as well).
+(re-run and re-verified at the end of every phase through Phase 6).
 
 **Phase 2 status correction (factual, not a plan revision):** §11 below originally described
 `Finding` and its supporting tables as Phase 3 ("Assessment, Evidence, and Scoring") work.
@@ -15,9 +20,14 @@ Phase 2's own brief required a working structured finding model, scan orchestrat
 persistence *before* Phase 3 — so `storage/db/models/{scan,file_inventory,domain_mapping,
 finding,scanner_execution}.py` were implemented in Phase 2, ahead of the schedule in §11's
 original table. This does not change §11's field-level design, only when it was built — see
-`models/README.md` and `PHASE_2_COMPLETION_REPORT.md` for the corrected phase mapping. Full
-`Control`/`Evidence`/`Score`/`Report`/`ProviderRequest`/`AuditEvent` (the control-evaluation
-side of the schema) remain Phase 3+, unchanged.
+`models/README.md` and `PHASE_2_COMPLETION_REPORT.md` for the corrected phase mapping.
+`Control`/`Evidence`/`Score`/`Recommendation` were implemented in Phase 3, as originally
+scheduled; `AuditEvent` (plus the net-new `ControlEvaluation`, not originally named in §11) was
+implemented in Phase 4, also as scheduled. `Report` and `ProviderRequest` remain unbuilt —
+`Report` has no dedicated table (report generation is stateless export, see
+`reporting/assessment_report_exporter.py`); `ProviderRequest` remains Phase 6 scope (no real
+external-provider `send()` implementation exists yet to log requests for). See
+`models/README.md` for the current, corrected phase mapping of every planned model.
 
 **Scope of this document:** Repository audit, architecture design, and phased migration plan for combining `RAG-Engineering-Lab`, `ai-project-control-tower`, and `AI-Project-Scope-Guard` into a unified, local-first, read-only banking assurance platform.
 
@@ -638,7 +648,8 @@ capability inventory.
 - *Expected output:* A scoring engine that can take a list of findings (including zero findings for an unevaluated domain) and correctly emit `DecisionCategory.INSUFFICIENT_EVIDENCE` rather than a false "clean" score — the core fix identified in the Executive Summary and §9.
 - *Tests:* Scoring unit tests per §12, specifically including the "no findings because unevaluated" vs. "no findings because clean" boundary case.
 - *Risks:* Medium — getting the confidence/evidence-completeness semantics right is a design risk, not just an implementation risk.
-- *Completion criteria:* Scoring engine unit tests pass, including the insufficient-evidence case; Alembic migration applies cleanly to a fresh local database.
+- *Completion criteria:* Met — see `PHASE_3_COMPLETION_REPORT.md`'s verdict section.
+  **Awaiting explicit approval to begin Phase 4.**
 
 **Phase 4 — Complete Banking Domain and Governance Layer**
 - *Objective:* Wire scanning + RAG + scoring together into a working end-to-end assessment covering all 16 domains (§9), and add the human-approval/audit-trail governance layer.
@@ -648,7 +659,8 @@ capability inventory.
 - *Expected output:* A working, human-reviewable end-to-end assessment run producing findings with confidence and evidence across all 16 domains; findings default to `pending` review status; every review action is logged.
 - *Tests:* Extend `tests/e2e/test_original_repos_not_modified.py`-style hash-comparison coverage to the full pipeline; assessment-engine integration tests; audit-trail completeness tests.
 - *Risks:* Medium-High — this is the largest single integration point in the whole migration; actual control-library content authoring requires domain expertise beyond engineering scope (§16, open question #4).
-- *Completion criteria:* A full assessment run completes end-to-end with zero writes to the target and produces at least one finding per represented domain; a finding can be reviewed/overridden and the change appears in the audit trail.
+- *Completion criteria:* Met — see `PHASE_4_COMPLETION_REPORT.md`'s verdict section.
+  **Awaiting explicit approval to begin Phase 5.**
 
 **Phase 5 — UI, Mock System, and Demonstration Workflow**
 - *Objective:* Build the banking-domain Streamlit UI, and populate the mock banking system scaffolded in Phase 1.
@@ -657,16 +669,57 @@ capability inventory.
 - *Expected output:* A reviewer can complete the full §8 flow through the UI, and a stakeholder demo can run entirely against synthetic data with zero real banking information involved.
 - *Tests:* Manual UI walkthrough; smoke test that the app starts without API keys; seed-script idempotency tests (running it twice produces no duplicate/inconsistent state).
 - *Risks:* Low — mostly presentation and content work by this point.
-- *Completion criteria:* `docker compose up` produces a working demo environment; the seed script is safely re-runnable; a reviewer can complete the full flow through the UI without touching the API directly.
+- *Completion criteria:* Met — see `PHASE_5_COMPLETION_REPORT.md`'s verdict section. Scope
+  note: `mock_banking_system/` content is illustrative technical-finding fixture data (27
+  files, deterministic scanner-detectable findings), not authored regulatory/compliance
+  control *content* — that remains open question #4 (§16), unchanged. `ui/services/
+  api_client.py` was built as `ui/services/assessment_service.py` instead (no FastAPI backend
+  exists for the UI to call — see `docs/architecture.md`'s structural-deviations list, item
+  #5). The automated headless `streamlit.testing.v1.AppTest` smoke suite substitutes for a
+  literal `docker compose up` walkthrough, which was not re-verified as a fresh container
+  build in this session; the existing `deployment/docker-compose.yml` (database service only,
+  unchanged since Phase 1/2) plus a locally-run `streamlit run ui/streamlit_app.py` was what
+  was actually exercised. **Awaiting explicit approval to begin Phase 6.**
 
-**Phase 6 — Optional External Providers**
-- *Objective:* Implement real `providers/*` calls per §7, disabled by default.
-- *Included:* Real `send()` implementations for `providers/{openai,gemini,claude}_adapter.py` (Phase 1 scaffolded the classes and fail-closed behavior but left `send()` raising `NotImplementedError`), provider-request logging (`models/provider_request.py`), approval gates wired to `governance/approval_workflow.py` (Phase 4).
-- *Prerequisites:* Phase 4 approval checkpoint passed (approval workflow must exist before any provider call can be gated by it).
-- *Expected output:* External-provider enrichment available only when explicitly enabled and approved, with full logging.
-- *Tests:* Provider-adapter tests extended with real (mocked-at-the-SDK-boundary) call tests; isolation tests confirming the platform still functions correctly with providers disabled (the default state, already verified in Phase 1).
-- *Risks:* Low functional risk (additive, off by default) but high scrutiny warranted given the sensitivity of the data involved.
-- *Completion criteria:* With `EXTERNAL_PROVIDERS_ENABLED=false` (default), zero outbound network calls occur anywhere in the platform during a full assessment run — verified by an isolation test (already true and tested as of Phase 1; must remain true).
+**Phase 6 — Final Documentation, Repository Cleanup, Packaging, and Optional Agent Infrastructure**
+(scope revised at execution time from this section's original "Optional External Providers"
+framing — see the note immediately below)
+- *Objective (as actually executed):* Close out the project — bring documentation in line with
+  the implemented Phase 1–5 system, perform a full repository cleanup inventory (no automatic
+  deletion), install optional agent infrastructure (`agents/`) on top of the existing
+  `providers/` scaffolding, and run a complete final verification and closure review.
+- *Scope-revision note:* This section originally called for real `send()` implementations,
+  `models/provider_request.py`, and approval gates wired specifically to provider calls. At
+  execution time, the operator explicitly redefined Phase 6 as the project's final closure
+  phase and directed that real outbound provider calls remain **out of scope** — "Adapters may
+  remain configuration-ready or minimally implemented if real external execution is outside the
+  approved final scope. Do not make real paid API calls by default." `providers/*_adapter.py::send()`
+  therefore still raises `NotImplementedError` by design, not by omission — see
+  `providers/README.md` and `PHASE_6_COMPLETION_REPORT.md`. `models/provider_request.py` was not
+  built (no real request exists yet to log). What *was* built: `agents/` — a higher-level
+  advisory boundary (explain a finding, summarize a domain, answer a question, generate an
+  executive summary) with its own dedicated sanitization layer, a safe provider-selection
+  registry that always defaults to a local/deterministic mode, full UI integration, and
+  append-only audit logging — see `agents/README.md` and `docs/agent_guide.md`.
+- *Prerequisites:* Phase 5 approval checkpoint passed.
+- *Expected output (as actually executed):* Documentation across the repository accurately
+  reflects the implemented system; a categorized cleanup inventory (Keep/Consolidate/Archive/
+  Safe to delete/Owner decision required) with no file deleted automatically; the optional agent
+  boundary fully usable in local mode with zero API keys and zero external calls; a final
+  closure report.
+- *Tests:* `tests/unit/test_agent_*.py`, `tests/unit/test_agent_ui_service.py`,
+  `tests/security/test_agent_no_secret_leakage.py`, `tests/unit/test_streamlit_app_smoke.py`'s
+  agent-tab coverage — all using mocks/fakes for external adapters, no real paid API call
+  required for the normal suite. Isolation tests confirm the platform still functions correctly
+  with the agent disabled (the default state).
+- *Risks:* Low functional risk (the agent boundary is additive and off by default); the main
+  risk this phase manages is documentation/repository drift accumulated across five prior
+  phases, addressed directly in `PHASE_6_COMPLETION_REPORT.md`.
+- *Completion criteria:* With `AGENT_ENABLED=false` (default) and `EXTERNAL_PROVIDERS_ENABLED=false`
+  (default), zero outbound network calls occur anywhere in the platform during a full assessment
+  run, including when the agent tab is used — verified by an isolation test (true since Phase 1;
+  confirmed to remain true with `agents/` added). Met — see `PHASE_6_COMPLETION_REPORT.md`'s
+  verdict section.
 
 ---
 
@@ -753,34 +806,43 @@ No calendar commitment is given, per instruction. Complexity is qualitative; mod
 
 ## 17. Definition of Done
 
-**Planning phase (this document):** Done — reviewed and approved in principle, with the corrections in "Plan revision notice" applied. Open questions #2–#7 in §16 remain unresolved and do not block Phase 1 (they were not on Phase 1's critical path), but #7 blocks Phase 2's completion criteria and #4 blocks Phase 4's.
+**Planning phase (this document):** Done — reviewed and approved in principle, with the corrections in "Plan revision notice" applied. Open questions #2–#7 in §16 remain unresolved and do not block Phase 1 (they were not on Phase 1's critical path), but #7 blocks Phase 2's completion criteria and #4 blocks Phase 4's — #4 remains open; Phase 4's own completion criteria did not require it to be resolved, only that the platform be honest about the gap (see `knowledge_base/controls/README.md`).
 
 **Phase 1 ("Unified Foundation"):** Done — see `PHASE_1_COMPLETION_REPORT.md`.
 
-**Integration phase (Phases 2-5, §13):** Complete when each phase's approval checkpoint has passed, and the platform-wide non-modification E2E test (extended from `ai-project-control-tower`'s existing pattern, already implemented for the current codebase in `tests/e2e/test_original_repos_not_modified.py`) passes against the full assessment pipeline, not just the scanner.
+**Phase 2 ("Banking Source Ingestion and Read-Only Scanning Engine"):** Done — see `PHASE_2_COMPLETION_REPORT.md`.
 
-**Functional MVP:** A single local user can select a target repository, run a full assessment against at least one pilot banking control domain, receive findings with evidence/confidence/severity, have those findings scored with correct insufficient-evidence handling, review and approve/override them, and export a sanitized report — entirely without any external network call, verified by an isolation test (the isolation-test pattern itself is already implemented and passing as of Phase 1 — see `tests/isolation/`).
+**Phase 3 ("Assessment, Evidence, and Scoring"):** Done — see `PHASE_3_COMPLETION_REPORT.md`.
 
-**Local-only deployment:** The platform runs via `docker compose up` (or equivalent) with zero required external API keys and `EXTERNAL_PROVIDERS_ENABLED=false` — already true and tested as of Phase 1 (`tests/unit/test_config_defaults.py`, `tests/unit/test_app_health.py`).
+**Phase 4 ("Complete Banking Domain and Governance Layer"):** Done — see `PHASE_4_COMPLETION_REPORT.md`.
 
-**Optional external-provider layer:** Complete when all of §7's controls (disabled-by-default, approval-gated, sanitized, logged, fallback-safe) are implemented and covered by isolation tests proving the platform's local-only behavior is unaffected when the layer remains disabled. The disabled-by-default/kill-switch/fail-closed-construction parts are already implemented and tested as of Phase 1; only real outbound `send()` calls (Phase 6) and provider-request logging remain.
+**Phase 5 ("UI, Mock System, and Demonstration Workflow"):** Done — see `PHASE_5_COMPLETION_REPORT.md`.
+
+**Phase 6 ("Final Documentation, Repository Cleanup, Packaging, and Optional Agent Infrastructure"):** Done — see `PHASE_6_COMPLETION_REPORT.md`. This was the project's final planned phase.
+
+**Integration phase (Phases 2-5, §13):** Complete — every phase's approval checkpoint passed, and the platform-wide non-modification E2E test (extended from `ai-project-control-tower`'s existing pattern, `tests/e2e/test_original_repos_not_modified.py`) passes against the full assessment pipeline, not just the scanner — re-verified at the end of Phase 6.
+
+**Functional MVP:** Done. A single local user can select a target repository, run a full assessment across all 16 banking control domains, receive findings with evidence/confidence/severity, have those findings scored with correct insufficient-evidence handling, review and approve/override them, and export a sanitized report — entirely without any external network call, verified by an isolation test (`tests/isolation/`, extended through Phase 6 to also cover `agents/`).
+
+**Local-only deployment:** The platform runs via `docker compose up` (or equivalent) with zero required external API keys and `EXTERNAL_PROVIDERS_ENABLED=false` — already true and tested as of Phase 1 (`tests/unit/test_config_defaults.py`, `tests/unit/test_app_health.py`), and re-confirmed with `AGENT_ENABLED=false` added in Phase 6.
+
+**Optional external-provider layer:** Partially complete, by final, explicit decision — see §13's Phase 6 entry. The disabled-by-default/kill-switch/fail-closed-construction parts, and now a full optional advisory *agent* boundary (`agents/`) built on top of them, are implemented and tested. Real outbound `send()` calls and `models/provider_request.py` were explicitly descoped from this project's final phase — see `providers/README.md` for why this is a deliberate boundary, not an unfinished task.
 
 ---
 
 ## 18. Recommended Next Step
 
-**Phase 1 is complete** — see `PHASE_1_COMPLETION_REPORT.md` for the full record. The
-recommended next step is: obtain a real PostgreSQL + pgvector instance (local Docker Compose
-is sufficient) for this development environment, then begin **Phase 2** exactly as scoped in
-§13 — read-only repository scanning (`scanners/repo_scanner.py`, `scanners/file_classifier.py`)
-and the local RAG document lifecycle (`rag/ingestion`, `rag/chunking`, `rag/retrieval`,
-`rag/pipeline.py`), including the first live-database verification of
-`rag/vectorstores/pgvector_store.py`. In parallel, resolve open question #2 (deployment/auth
-model) with the stakeholder, since it affects how much of Phase 4's governance layer needs
-authentication awareness designed in from the start rather than retrofitted. Do not begin
-Phase 2 implementation work until this revised plan and the Phase 1 completion report have
-been explicitly approved.
+**Phase 6 is complete — this was the project's final planned phase.** See
+`PHASE_6_COMPLETION_REPORT.md` for the full closure record, including the documentation cleanup
+inventory and final repository status. No further phase is scheduled. Should the project
+resume in the future, the natural next step (never started, never scoped as mandatory) would be
+implementing real `providers/*_adapter.py::send()` calls behind the existing, already-tested
+`agents/`/`providers/` configuration surface — see `docs/agent_guide.md`'s "Limitations" and
+"Optional live smoke-test instructions" for exactly what that would require. Open questions #2
+(deployment/auth model) and #4 (regulatory control-library content) remain open; neither
+blocked any phase through Phase 6 and neither requires resolution for the project to be
+considered closed at its current, approved scope.
 
 ---
 
-*This document was revised per stakeholder-approved corrections (see "Plan revision notice") and now reflects Phase 1 as implemented. No source files in `RAG-Engineering-Lab/`, `ai-project-control-tower/`, or `AI-Project-Scope-Guard/` were modified, moved, deleted, or merged in the course of producing this document or implementing Phase 1 — verified by `tests/e2e/test_original_repos_not_modified.py`.*
+*This document was revised per stakeholder-approved corrections (see "Plan revision notice") and now reflects Phases 1–6 as implemented — the project's full planned scope. No source files in `RAG-Engineering-Lab/`, `ai-project-control-tower/`, or `AI-Project-Scope-Guard/` were modified, moved, deleted, or merged in the course of producing this document or implementing Phases 1–6 — verified by `tests/e2e/test_original_repos_not_modified.py`, re-run at the end of every phase.*

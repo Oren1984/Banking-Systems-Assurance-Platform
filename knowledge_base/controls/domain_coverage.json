@@ -1,0 +1,172 @@
+{
+  "generated_by": "scripts/generate_knowledge_base_manifest.py",
+  "source_of_truth": "controls/catalog.py \u2014 this file is generated, never hand-edited",
+  "note": "Illustrative, engineering-derived technical control coverage per banking domain \u2014 not a regulatory or compliance control library. See BANKING_PLATFORM_INTEGRATION_PLAN.md \u00a716 open question #4.",
+  "domain_count": 16,
+  "domains": {
+    "core_banking": {
+      "label": "Core Banking and Account Management",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "payments": {
+      "label": "Payments",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "credit_lending": {
+      "label": "Credit and Lending",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "investments_trading": {
+      "label": "Investments and Trading-Related Systems",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "onboarding_identity_access": {
+      "label": "Customer Onboarding, Identity, and Access",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "transaction_processing_reporting": {
+      "label": "Transaction Processing and Financial Reporting",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "fraud_controls": {
+      "label": "Fraud-Related Controls",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "privacy_data_protection": {
+      "label": "Privacy and Data Protection",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "application_security": {
+      "label": "Application Security",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PERM-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": true
+    },
+    "infrastructure_api_security": {
+      "label": "Infrastructure and API Security",
+      "applicable_control_ids": [
+        "CTRL-CFG-001",
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": true
+    },
+    "database_controls_sod": {
+      "label": "Database Controls and Segregation of Duties",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001",
+        "CTRL-SQL-001"
+      ],
+      "has_domain_specific_control": true
+    },
+    "change_management": {
+      "label": "Change Management",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "monitoring_observability": {
+      "label": "Monitoring and Observability",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "business_continuity_dr": {
+      "label": "Business Continuity and Disaster Recovery",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "model_ai_governance": {
+      "label": "Model and AI Governance",
+      "applicable_control_ids": [
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": false
+    },
+    "human_approval_auditability": {
+      "label": "Human Approval Controls and Auditability",
+      "applicable_control_ids": [
+        "CTRL-AUDIT-001",
+        "CTRL-LOG-001",
+        "CTRL-PII-001",
+        "CTRL-SECRET-001",
+        "CTRL-SKIP-001"
+      ],
+      "has_domain_specific_control": true
+    }
+  }
+}

@@ -6,7 +6,9 @@ from __future__ import annotations
 # ai-project-control-tower/app/db/models/__init__.py's own
 # "# noqa: F401 — registers all models with Base.metadata" pattern.
 
+from storage.db.models.audit_event import AuditEvent  # noqa: F401
 from storage.db.models.control import Control  # noqa: F401
+from storage.db.models.control_evaluation import ControlEvaluation  # noqa: F401
 from storage.db.models.domain_mapping import DomainMappingRecord  # noqa: F401
 from storage.db.models.evidence import Evidence  # noqa: F401
 from storage.db.models.file_inventory import FileInventoryRecord  # noqa: F401
@@ -26,4 +28,6 @@ __all__ = [
     "Evidence",
     "Recommendation",
     "Score",
+    "ControlEvaluation",
+    "AuditEvent",
 ]

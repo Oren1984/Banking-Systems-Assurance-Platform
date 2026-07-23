@@ -1,15 +1,30 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Dict, List, Optional, Set
 
 from sqlalchemy.orm import Session
 
+from assessment.evaluators.control_evaluator import FindingForControlEvaluation, evaluate_all_domains
 from controls.catalog import control_for_rule_id, upsert_catalog
 from evidence.capture import FindingForEvidence, build_evidence
-from models.enums import ConfidenceLevel, Severity
+from governance.approval_workflow import (
+    DomainScoreState,
+    FinalizationCheckResult,
+    FindingReviewDecision,
+    FindingReviewState,
+    ScoreOverrideDecision,
+    check_finalization_policy,
+)
+from governance.approval_workflow import override_score as _validate_score_override
+from governance.approval_workflow import review_finding as _validate_finding_review
+from governance.audit_trail import AuditEventInput, build_audit_event
+from models.enums import AuditEventType, ConfidenceLevel, Severity
 from scanners.scan_orchestrator import ScanResult
 from scoring.engine import FindingForScoring, score_all_domains
 from scoring.recommendations import FindingForRecommendation, generate_recommendations
+from storage.db.models.audit_event import AuditEvent
+from storage.db.models.control_evaluation import ControlEvaluation
 from storage.db.models.domain_mapping import DomainMappingRecord
 from storage.db.models.evidence import Evidence
 from storage.db.models.file_inventory import FileInventoryRecord
@@ -29,6 +44,47 @@ from storage.db.models.score import Score
 # is covered separately by tests/integration/test_postgres_persistence.py
 # — see that file's own module docstring for whether it actually ran in a
 # given test session).
+
+
+def latest_scores_by_domain(
+    session: Session, scan_id: str, domains: Optional[List[str]] = None
+) -> Dict[str, Score]:
+    """Phase 5 — factored out of GovernanceRepository.check_finalization()
+    (Phase 4) so a third call site (the UI service layer, and
+    TraceabilityRepository) can share the exact same "which Score row is
+    the current one for this domain" rule rather than risking a second,
+    subtly different implementation. An override
+    (storage/db/repositories.py::GovernanceRepository.override_score())
+    always inserts a new row rather than mutating the original, so "latest
+    by calculated_at" is what makes an override actually take effect for
+    any reader — scoring, finalization, traceability, or the UI. `domains`
+    optionally restricts the query to a subset (e.g. one finding's own
+    domains); omitted, every domain scored for this scan is considered.
+    """
+    query = session.query(Score).filter(Score.scan_id == scan_id)
+    if domains is not None:
+        query = query.filter(Score.domain.in_(domains))
+    latest: Dict[str, Score] = {}
+    for row in query.all():
+        current = latest.get(row.domain)
+        if current is None or row.calculated_at >= current.calculated_at:
+            latest[row.domain] = row
+    return latest
+
+
+def _domain_coverage(session: Session, scan_id: str) -> tuple[Set[str], Dict[str, int]]:
+    """Shared by ScoringRepository and ControlEvaluationRepository (Phase
+    4) — both need the same "which domains did at least one scanned file
+    actually map to" signal, computed from persisted DomainMappingRecord
+    rows, never from findings alone. Kept as one module-level function so
+    the two repositories can never compute this differently."""
+    mappings = list(session.query(DomainMappingRecord).filter(DomainMappingRecord.scan_id == scan_id).all())
+    evaluated_domains = {m.domain for m in mappings}
+    files_by_domain: Dict[str, Set[str]] = {}
+    for m in mappings:
+        files_by_domain.setdefault(m.domain, set()).add(m.file_inventory_id)
+    files_evaluated = {domain: len(files) for domain, files in files_by_domain.items()}
+    return evaluated_domains, files_evaluated
 
 
 class ScanRepository:
@@ -191,7 +247,7 @@ class ScoringRepository:
         """Run scoring only (no evidence/recommendations) — used when only
         the domain decision categories are needed."""
         findings = self._findings_for_scan(scan_id)
-        evaluated_domains, files_evaluated = self._domain_coverage(scan_id)
+        evaluated_domains, files_evaluated = _domain_coverage(self._session, scan_id)
 
         scoring_inputs = [
             FindingForScoring(
@@ -312,6 +368,20 @@ class ScoringRepository:
             self._session.query(Evidence).filter(Evidence.finding_id == finding_id).all()
         )
 
+    def get_evidence_for_scan(self, scan_id: str) -> List[Evidence]:
+        """Phase 5 — every Evidence row for every Finding belonging to one
+        scan, via a join through Finding.scan_id (Evidence itself has no
+        scan_id column — see storage/db/models/evidence.py). Used to
+        reassemble a full AssessmentResult for an already-persisted scan
+        (assessment/engine.py::load_assessment_result()) without re-running
+        anything."""
+        return list(
+            self._session.query(Evidence)
+            .join(Finding, Evidence.finding_id == Finding.id)
+            .filter(Finding.scan_id == scan_id)
+            .all()
+        )
+
     def review_recommendation(
         self, recommendation_id: str, status: str, reviewed_by: str
     ) -> Optional[Recommendation]:
@@ -335,15 +405,209 @@ class ScoringRepository:
     def _findings_for_scan(self, scan_id: str) -> List[Finding]:
         return list(self._session.query(Finding).filter(Finding.scan_id == scan_id).all())
 
-    def _domain_coverage(self, scan_id: str) -> tuple[Set[str], Dict[str, int]]:
-        mappings = list(
-            self._session.query(DomainMappingRecord)
-            .filter(DomainMappingRecord.scan_id == scan_id)
+
+class ControlEvaluationRepository:
+    """
+    Phase 4 — persists assessment/evaluators/control_evaluator.py's pure
+    per-(domain, control) evaluation results for a scan. Reads the same
+    already-persisted Finding/DomainMappingRecord rows ScoringRepository
+    reads (never the in-memory ScanResult), for the same "no
+    ForeignKeyViolation surprises, no drift from what was actually
+    persisted" reasons documented on ScanRepository and ScoringRepository.
+
+    Kept as a separate class, callable at any time after a scan is
+    persisted — same "do not merge into an opaque autonomous flow" design
+    rule ScoringRepository's own docstring states.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def evaluate_and_persist(self, scan_id: str) -> List[ControlEvaluation]:
+        control_rows = upsert_catalog(self._session)
+        control_db_id_by_catalog_id = {c.control_id: c.id for c in control_rows}
+
+        findings = list(self._session.query(Finding).filter(Finding.scan_id == scan_id).all())
+        evaluated_domains, _ = _domain_coverage(self._session, scan_id)
+
+        evaluation_inputs = [
+            FindingForControlEvaluation(
+                finding_id=f.id, rule_id=f.rule_id, domains=list(f.banking_domains or [])
+            )
+            for f in findings
+        ]
+        results = evaluate_all_domains(evaluation_inputs, evaluated_domains)
+
+        rows = [
+            ControlEvaluation(
+                scan_id=scan_id,
+                control_id=control_db_id_by_catalog_id.get(r.control_id) if r.control_id else None,
+                domain=r.domain.value,
+                status=r.status.value,
+                finding_ids=r.finding_ids,
+            )
+            for r in results
+        ]
+        self._session.add_all(rows)
+        self._session.flush()
+        self._session.commit()
+        return rows
+
+    def get_for_scan(self, scan_id: str) -> List[ControlEvaluation]:
+        return list(
+            self._session.query(ControlEvaluation).filter(ControlEvaluation.scan_id == scan_id).all()
+        )
+
+
+class AuditRepository:
+    """
+    Phase 4 — persists governance/audit_trail.py's pure event-building
+    output. The only class in this codebase that writes to the
+    `audit_events` table; exposes exactly one write method (`record`) plus
+    read accessors — no update or delete method exists anywhere, by
+    design (see storage/db/models/audit_event.py's own module docstring).
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def record(self, event: AuditEventInput) -> AuditEvent:
+        built = build_audit_event(event)
+        row = AuditEvent(
+            scan_id=built.scan_id,
+            event_type=built.event_type,
+            actor=built.actor,
+            summary=built.summary,
+            payload=built.payload,
+        )
+        self._session.add(row)
+        self._session.flush()
+        self._session.commit()
+        return row
+
+    def get_for_scan(self, scan_id: str) -> List[AuditEvent]:
+        return list(
+            self._session.query(AuditEvent)
+            .filter(AuditEvent.scan_id == scan_id)
+            .order_by(AuditEvent.created_at)
             .all()
         )
-        evaluated_domains = {m.domain for m in mappings}
-        files_by_domain: Dict[str, Set[str]] = {}
-        for m in mappings:
-            files_by_domain.setdefault(m.domain, set()).add(m.file_inventory_id)
-        files_evaluated = {domain: len(files) for domain, files in files_by_domain.items()}
-        return evaluated_domains, files_evaluated
+
+    def get_all(self) -> List[AuditEvent]:
+        return list(self._session.query(AuditEvent).order_by(AuditEvent.created_at).all())
+
+
+class GovernanceRepository:
+    """
+    Phase 4 — applies governance/approval_workflow.py's validated human
+    review/override decisions and records an AuditEvent for every action.
+    Never applies an unvalidated decision: every method calls the pure
+    validator first and lets GovernanceError propagate rather than
+    persisting a rejected transition.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+        self._audit = AuditRepository(session)
+
+    def review_finding(self, decision: FindingReviewDecision) -> Optional[Finding]:
+        validated = _validate_finding_review(decision)
+        row = self._session.get(Finding, validated.finding_id)
+        if row is None:
+            return None
+        row.human_review_status = validated.new_status.value
+        row.reviewed_by = validated.reviewed_by
+        row.reviewed_at = datetime.now(timezone.utc)
+        self._session.flush()
+        self._audit.record(
+            AuditEventInput(
+                event_type=AuditEventType.FINDING_REVIEWED,
+                actor=validated.reviewed_by,
+                scan_id=row.scan_id,
+                summary=f"Finding {row.id} reviewed: {validated.new_status.value}",
+                payload={
+                    "finding_id": row.id,
+                    "new_status": validated.new_status.value,
+                    "reason": validated.reason or "",
+                },
+            )
+        )
+        return row
+
+    def override_score(self, decision: ScoreOverrideDecision) -> Optional[Score]:
+        validated = _validate_score_override(decision)
+        original = self._session.get(Score, validated.original_score_id)
+        if original is None:
+            return None
+        new_row = Score(
+            scan_id=validated.scan_id,
+            domain=validated.domain,
+            raw_score=original.raw_score,
+            weighted_score=(
+                validated.new_weighted_score
+                if validated.new_weighted_score is not None
+                else original.weighted_score
+            ),
+            confidence_level=original.confidence_level,
+            evidence_completeness=original.evidence_completeness,
+            decision_category=validated.new_decision_category.value,
+            files_evaluated=original.files_evaluated,
+            findings_count=original.findings_count,
+            override_of=original.id,
+        )
+        self._session.add(new_row)
+        self._session.flush()
+        self._audit.record(
+            AuditEventInput(
+                event_type=AuditEventType.SCORE_OVERRIDDEN,
+                actor=validated.reviewed_by,
+                scan_id=validated.scan_id,
+                summary=(
+                    f"Score for domain '{validated.domain}' overridden to "
+                    f"{validated.new_decision_category.value}"
+                ),
+                payload={
+                    "original_score_id": original.id,
+                    "new_score_id": new_row.id,
+                    "domain": validated.domain,
+                    "reason": validated.reason,
+                },
+            )
+        )
+        return new_row
+
+    def check_finalization(self, scan_id: str) -> FinalizationCheckResult:
+        """Read-only policy check — never mutates anything. See
+        governance/approval_workflow.py::check_finalization_policy()'s own
+        docstring for exactly what blocks finalization."""
+        latest_by_domain = latest_scores_by_domain(self._session, scan_id)
+        findings = list(self._session.query(Finding).filter(Finding.scan_id == scan_id).all())
+
+        score_states = [
+            DomainScoreState(domain=s.domain, decision_category=s.decision_category)
+            for s in latest_by_domain.values()
+        ]
+        finding_states = [
+            FindingReviewState(
+                finding_id=f.id,
+                domain_values=list(f.banking_domains or []),
+                human_review_status=f.human_review_status,
+            )
+            for f in findings
+        ]
+        return check_finalization_policy(score_states, finding_states)
+
+    def get_score_history(self, scan_id: str, domain: str) -> List[Score]:
+        """Every Score row ever calculated for one (scan, domain) pair,
+        oldest first — the original deterministic-engine result plus any
+        subsequent overrides, each linked to its predecessor via
+        `override_of`. Never mutates or deletes a row; this is purely a
+        read of history, used by the UI to render an override's lineage
+        without ever losing the original score (BANKING_PLATFORM_INTEGRATION_PLAN.md's
+        "historical scores must never be mutated" constraint)."""
+        return list(
+            self._session.query(Score)
+            .filter(Score.scan_id == scan_id, Score.domain == domain)
+            .order_by(Score.calculated_at)
+            .all()
+        )

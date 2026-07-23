@@ -21,6 +21,15 @@ def test_accepts_path_within_allowlist(tmp_path):
     assert resolved == target.resolve()
 
 
+def test_accepts_mock_fixture_path_inside_a_mounted_scan_root(tmp_path):
+    mounted_root = tmp_path / "scan-targets"
+    target = mounted_root / "mock_banking_system"
+    target.mkdir(parents=True)
+    settings = Settings(_env_file=None, allowed_scan_paths=[str(mounted_root)])
+    resolved = validate_scan_path(str(target), settings)
+    assert resolved == target.resolve()
+
+
 def test_rejects_path_outside_allowlist(tmp_path):
     allowed = tmp_path / "allowed"
     allowed.mkdir()

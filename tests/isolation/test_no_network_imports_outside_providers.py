@@ -34,6 +34,24 @@ _SCANNED_TOP_LEVEL_DIRS = [
     "app",
     "config",
     "reporting",
+    # Phase 3/4 additions — these packages are exactly as deterministic and
+    # local-only as everything above; extended here to close a gap where
+    # they were added to the platform without being added to this scan list.
+    "controls",
+    "evidence",
+    "scoring",
+    "assessment",
+    # Phase 5 additions — ui/services (no Streamlit-side network calls of
+    # its own; only ever talks to the local database) and the demo seed
+    # script.
+    "ui",
+    "scripts",
+    # Phase 6 addition — the optional agent boundary. Deliberately scanned
+    # here too: agents/ orchestrates providers/ (the one directory allowed
+    # to import a network client) but must never import one directly
+    # itself — every outbound call, if one is ever really implemented,
+    # must go through a provider adapter, not agents/ reaching around it.
+    "agents",
 ]
 
 

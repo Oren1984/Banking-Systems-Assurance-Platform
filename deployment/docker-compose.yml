@@ -3,27 +3,47 @@ services:
     image: pgvector/pgvector:pg16
     container_name: banking_assurance_db
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:?POSTGRES_USER must be set, no default}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set, no default}
-      POSTGRES_DB: ${POSTGRES_DB:?POSTGRES_DB must be set, no default}
+      POSTGRES_USER: ${POSTGRES_USER:-banking_assurance}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-CHANGE_ME}
+      POSTGRES_DB: ${POSTGRES_DB:-banking_assurance_db}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
       - "5434:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-banking_assurance} -d ${POSTGRES_DB:-banking_assurance_db}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-# Phase 1 scope: only the database service is defined. `api` and `ui`
-# services are added once app/main.py and ui/ have real Phase 2+ content —
-# adding them now against empty/placeholder code would violate "do not
-# populate later-phase modules with fake implementations."
-#
-# Chroma requires no server (PersistentClient writes to
-# CHROMA_PERSIST_DIRECTORY on the same host/container filesystem as the
-# app), so it has no service entry here — only a local directory.
+  app:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: banking_assurance_app
+    env_file:
+      - ../.env
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-banking_assurance}:${POSTGRES_PASSWORD:-CHANGE_ME}@db:5432/${POSTGRES_DB:-banking_assurance_db}
+      ALLOWED_SCAN_PATHS: ${DOCKER_ALLOWED_SCAN_PATHS:-/scan-targets/mock_banking_system}
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8501:8501"
+    volumes:
+      - ../mock_banking_system:/scan-targets/mock_banking_system:ro
+      # Optional additional Windows scan target (read-only):
+      # - C:/Projects/TargetBankingSystem:/scan-targets/target-system:ro
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=5).read()\"",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
 
 volumes:
   postgres_data:

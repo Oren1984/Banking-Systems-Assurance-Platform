@@ -1,26 +1,34 @@
-# Mock Banking System — Phase 1 Status
+# Mock Banking System — Status
 
 See `mock_banking_system/README.md` for the full purpose statement, hard rules (no real
-banking/customer data, ever), and planned directory layout. This document only records what
-exists as of Phase 1.
+banking/customer data, ever), and directory layout, and
+`docs/mock_banking_planted_findings.md` for the complete, actually-executed finding/score
+inventory this fixture produces.
 
-## Status: scaffolding only
+## Status: populated (Phase 5)
 
-- `mock_banking_system/{architecture,app,api,config,database,policies,evidence,sample_exports}/`
-  — empty directories, present so the Phase 5 layout is already agreed and stable.
-- `scripts/seed_mock_banking_demo.py` — a documented interface placeholder. Running it
-  (`python scripts/seed_mock_banking_demo.py`) validates configuration and prints the list of
-  actions it will perform once implemented; it writes no data. See the module docstring for
-  the full list of Phase 5 requirements (idempotent, deterministic, no real secrets, tested).
+- `mock_banking_system/{app,api,config,database,deployment,infra,observability,logging,
+  architecture,policies}/` — 27 synthetic source files spanning 15 of the 16 approved banking
+  domains, with a controlled mix of planted positive findings, negative (clean) examples, and
+  multiple severity levels.
+- `scripts/seed_mock_banking_demo.py` — fully implemented. Running it
+  (`python -m scripts.seed_mock_banking_demo`, requires `DATABASE_URL`) runs one real, full
+  `assessment.engine.run_assessment()` call against `mock_banking_system/` and writes
+  `<report_output_dir>/mock_banking_demo/latest_assessment.{json,md}` (default
+  `data/reports/mock_banking_demo/`) — deliberately **outside** `mock_banking_system/` itself,
+  so a generated report is never re-scanned as if it were part of the fixture (see
+  `mock_banking_system/README.md`'s "Hard rules").
+- `mock_banking_system/evidence/` remains intentionally empty — superseded by the platform's
+  own generated `Evidence` rows (Phase 3); a static synthetic-evidence directory would
+  duplicate what the platform now produces itself.
 
-## Explicitly not done in Phase 1
+## What was deferred, and why
 
-- No synthetic controls, documents, findings, or assessment targets exist yet.
-- No compliant/weak/missing/ambiguous/insufficient-evidence example data exists yet.
-- No sample technical or executive report exists yet.
+`model_ai_governance` has no represented content — deliberately, not an oversight. It exists
+specifically so a full assessment run demonstrates `DecisionCategory.INSUFFICIENT_EVIDENCE`
+against real, observable output, not a synthetic dataclass in a unit test. See
+`docs/mock_banking_planted_findings.md`'s "Intentional gap" section.
 
-All of the above are scheduled for **Phase 5** ("UI, Mock System, and Demonstration
-Workflow") per `BANKING_PLATFORM_INTEGRATION_PLAN.md` Part B. Populating this system before
-`assessment/`, `scoring/`, and `models/finding.py` exist (Phases 3–4) would require either
-fabricating data unconnected to any real pipeline or inventing schema ahead of the models
-that define it — both were judged worse than waiting.
+Real banking regulatory/compliance control *content* (as opposed to the illustrative technical
+controls this fixture exercises) remains out of scope — `BANKING_PLATFORM_INTEGRATION_PLAN.md`
+§16 open question #4, unchanged.

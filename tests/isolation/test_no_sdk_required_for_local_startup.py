@@ -55,6 +55,32 @@ _CORE_MODULES = [
     "scanners.rules.insecure_config_scanner",
     "scanners.rules.unsupported_file_scanner",
     "reporting.scan_report_exporter",
+    # Phase 3
+    "controls.catalog",
+    "evidence.capture",
+    "scoring.engine",
+    "scoring.recommendations",
+    # Phase 4
+    "assessment.engine",
+    "assessment.traceability",
+    "assessment.evaluators.control_evaluator",
+    "governance.approval_workflow",
+    "governance.audit_trail",
+    "governance.retention",
+    # Phase 5
+    "ui.services.assessment_service",
+    "reporting.assessment_report_exporter",
+    "scripts.seed_mock_banking_demo",
+    # Phase 6
+    "agents.contracts",
+    "agents.sanitizer",
+    "agents.local_agent",
+    "agents.registry",
+    "agents.agent_service",
+    "ui.services.agent_ui_service",
+    "providers.openai_adapter",
+    "providers.gemini_adapter",
+    "providers.claude_adapter",
 ]
 
 

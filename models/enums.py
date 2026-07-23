@@ -199,6 +199,69 @@ class RecommendationSource(str, Enum):
     DETERMINISTIC_TEMPLATE = "deterministic_template"
 
 
+# ---------------------------------------------------------------------------
+# Phase 4 additions (assessment orchestration, control evaluation, audit
+# trail, human-in-the-loop governance). Appended here for the same reason
+# the Phase 2 and Phase 3 additions were — this module is the single home
+# for platform-wide vocabulary.
+# ---------------------------------------------------------------------------
+
+
+class ControlEvaluationStatus(str, Enum):
+    """The outcome of checking one control against one banking domain for
+    one scan (assessment/evaluators/control_evaluator.py). Deliberately
+    distinct from DecisionCategory (a domain-level, severity-weighted
+    aggregate) — this is a per-control, presence/absence determination:
+    did any finding within this domain match this control's rule prefix.
+
+    INSUFFICIENT_EVIDENCE mirrors scoring/engine.py's core fix at the
+    control granularity: a domain that was never evaluated must not
+    silently report every one of its applicable controls as SATISFIED."""
+
+    SATISFIED = "satisfied"
+    GAP = "gap"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+
+
+class AuditEventType(str, Enum):
+    """The fixed vocabulary of governance-relevant events
+    (governance/audit_trail.py). Closed on purpose — an append-only log
+    whose event types could be arbitrary free text would not be reliably
+    queryable or reportable."""
+
+    SCAN_PERSISTED = "scan_persisted"
+    SCORING_COMPLETED = "scoring_completed"
+    CONTROL_EVALUATION_COMPLETED = "control_evaluation_completed"
+    ASSESSMENT_COMPLETED = "assessment_completed"
+    FINDING_REVIEWED = "finding_reviewed"
+    RECOMMENDATION_REVIEWED = "recommendation_reviewed"
+    SCORE_OVERRIDDEN = "score_overridden"
+    AGENT_ACTION = "agent_action"
+
+
+# ---------------------------------------------------------------------------
+# Phase 6 additions (optional external-agent infrastructure). Appended here
+# for the same reason every prior phase's additions were — this module is
+# the single home for platform-wide vocabulary. The agent boundary sits
+# outside the deterministic assessment core (see agents/README.md); its
+# actions still use this shared vocabulary rather than defining a second,
+# competing enum module.
+# ---------------------------------------------------------------------------
+
+
+class AgentActionType(str, Enum):
+    """The fixed set of advisory actions the optional agent boundary
+    supports (agents/agent_service.py). Closed on purpose — every action
+    has its own dedicated, size-limited context-sanitization function
+    (agents/sanitizer.py); an open-ended action type would make that
+    boundary impossible to reason about."""
+
+    EXPLAIN_FINDING = "explain_finding"
+    SUMMARIZE_DOMAIN = "summarize_domain"
+    ANSWER_QUESTION = "answer_question"
+    EXECUTIVE_SUMMARY = "executive_summary"
+
+
 __all__ = [
     "Severity",
     "ConfidenceLevel",
@@ -215,4 +278,7 @@ __all__ = [
     "EvidenceType",
     "RecommendationStatus",
     "RecommendationSource",
+    "ControlEvaluationStatus",
+    "AuditEventType",
+    "AgentActionType",
 ]

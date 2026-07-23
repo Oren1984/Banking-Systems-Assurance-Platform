@@ -1,0 +1,8 @@
+# SYNTHETIC MOCK BANKING SYSTEM — fake deployment/change-management config, not real.
+# Deliberately planted finding — see docs/mock_banking_planted_findings.md.
+services:
+  api:
+    image: mock-bank/api:latest
+    environment:
+      HOST: 0.0.0.0
+      # expect CFG-006 (service binds to all network interfaces)
