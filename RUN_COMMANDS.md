@@ -1,5 +1,14 @@
 # Banking Systems Assurance Platform - Run Commands (PowerShell)
 
+
+## Optional Local Developer Mode (Linux / macOS)
+
+end from virtual environment:
+
+```bash
+deactivate
+```
+
 ## First-Time Docker Setup (Recommended)
 
 ```powershell
