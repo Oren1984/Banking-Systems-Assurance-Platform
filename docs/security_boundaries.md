@@ -211,6 +211,69 @@ repositories and unchanged by Phase 2 (out of scope per the Phase 2 brief's expl
 Out of Scope" list). This remains an open question requiring a stakeholder decision on the
 deployment model (see `BANKING_PLATFORM_INTEGRATION_PLAN.md` §16, open question #2).
 
+**Confirmed and deliberately unchanged by the post-Phase-6 hardening recap** (see
+`README.md`'s "Current Implementation vs. Production Requirements" table): no login, session,
+role, or RBAC system was added. The owner's explicit decision for that recap was to document
+this gap clearly — in this file, in `README.md`, and in the running app's own **Help / System
+Information** panel — rather than add authentication, since a real auth/RBAC system is judged
+out of proportion for a local, single-operator POC/MVP and was declined pending a separate,
+explicit decision on the deployment model. What the recap *did* change, to reduce the false
+sense of accountability this gap creates: the reviewer/actor text inputs in
+`ui/streamlit_app.py` are now explicitly labeled "unverified demo entry — not authenticated,"
+and the Governance tab's audit-trail view carries the same caveat next to the events it lists.
+The underlying `governance/audit_trail.py::build_audit_event()` behavior (actor is any
+non-empty string, sanitized before storage) is unchanged — this was a labeling/documentation
+fix, not a behavior change, per the owner's explicit "no changes to the governance workflow
+solely to support authentication" instruction.
+
+Production would require: real authentication with verified credentials, session-bound
+identity, role separation (RBAC) for governance actions, audit events bound to a verified
+identity rather than free text, and MFA/SSO as applicable — see README.md's table for the full
+list. None of this exists in the current codebase.
+
+## Database status visibility (post-Phase-6 hardening recap)
+
+The Streamlit status banner's "Database" indicator now reflects an actual, timed connectivity
+probe (`storage/db/session.py::check_database_connectivity()` — a short-lived, disposable
+`SELECT 1` connection, 2-second `connect_timeout` on PostgreSQL URLs, cached for 15 seconds via
+`st.cache_data` to avoid a live round-trip on every Streamlit rerun) rather than merely checking
+whether `DATABASE_URL` is set. A connectivity failure is logged (exception *type* only, not the
+raw driver error, to avoid leaking connection details in this unauthenticated UI) and surfaces
+as `UNREACHABLE` in the banner rather than a misleading `YES`. This is a UI status indicator
+only — it does not gate or alter any assessment/governance operation, and no monitoring service
+(Prometheus, Grafana, or otherwise) was added; `observability/` remains unimplemented by
+deliberate scope decision.
+
+## Error handling in the UI (post-Phase-6 hardening recap)
+
+`ui/streamlit_app.py` previously displayed raw `str(exception)` text directly to any viewer on
+five failure paths (run assessment, review a finding, override a score, ask the AI assistant a
+question, run a Quick Scan). Since this UI has no authentication, that raw text (which can
+incidentally include internal paths, DB errors, or library internals) was potentially visible
+to anyone who could reach the app. All five now show a generic, action-specific message (e.g.
+"Assessment could not be completed — see application logs for details.") while the full
+exception (type + a `governance/report_sanitizer.py`-sanitized message, so any incidental
+secret-shaped or auto-fix-shaped text is still masked) is logged via `core/logging.py`'s
+structured logger for operator diagnosis. No scanned source content, uploaded file content, or
+provider response is included in these log lines — only the exception raised by the platform's
+own orchestration code.
+
+## Runtime validation (post-Phase-6 hardening recap)
+
+The above (database connectivity indicator, sanitized error handling, unverified-identity
+labeling, and the Help / System Information panel) was manually verified against a live
+`docker compose -f deployment/docker-compose.yml up --build` stack, not only against the
+automated test suite: application startup, the database status banner (`CONNECTED` against a
+real PostgreSQL container), Quick Scan, a full Full Assessment run, all six Full Assessment
+tabs, a governance finding review (audit trail count incremented correctly, actor recorded
+as typed), a deliberately-submitted prompt-injection question (rejected, generic UI message
+shown, full sanitized detail logged server-side — see `docs/PROJECT_RUNBOOK.md` §13.F for one
+startup-blocking Windows/CRLF issue found and fixed during this pass), and the Help / System
+Information panel's content. No malformed or truncated UI text was found beyond Streamlit's
+own responsive `st.metric` ellipsis behavior at narrow viewport widths (a pre-existing,
+cosmetic, non-blocking display characteristic, not corrupted data — the full values are present
+in the page's own text/DOM).
+
 ## What this platform does not claim
 
 This is not a claim of banking-grade security. It is a foundation with specific, tested

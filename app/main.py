@@ -10,6 +10,16 @@ from core.domains import BankingDomain
 # provider kill switch, domain count). No scan/assessment/report routes
 # exist yet — those are adapted from ai-project-control-tower/app/api/routes/*
 # starting in Phase 2. See app/README.md.
+#
+# NOT SERVED IN THE ACTUAL DEPLOYMENT: the platform runs as a Streamlit app
+# (deployment/docker-entrypoint.sh execs `streamlit run ui/streamlit_app.py`
+# only). This FastAPI app and its /health route are never started by the
+# Docker image or any documented run command — they exist only as a tested,
+# importable module (tests/unit/test_app_health.py uses FastAPI's
+# TestClient directly, not a running server). Documented here rather than
+# removed: the endpoint's own tests exercise still-correct, safe behavior,
+# and it remains a plausible Phase 2+ foundation if a real HTTP API is ever
+# added — see app/README.md's "Phase 2+ (planned)" note.
 
 app = FastAPI(
     title="Banking Systems Assurance Platform",

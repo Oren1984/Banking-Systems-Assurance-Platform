@@ -25,7 +25,7 @@ services:
       - ../.env
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-banking_assurance}:${POSTGRES_PASSWORD:-CHANGE_ME}@db:5432/${POSTGRES_DB:-banking_assurance_db}
-      ALLOWED_SCAN_PATHS: ${DOCKER_ALLOWED_SCAN_PATHS:-/scan-targets/mock_banking_system}
+      ALLOWED_SCAN_PATHS: ${DOCKER_ALLOWED_SCAN_PATHS:-/scan-targets/mock_banking_system,/scan-targets/reference_banking_system}
     depends_on:
       db:
         condition: service_healthy
@@ -33,6 +33,7 @@ services:
       - "8501:8501"
     volumes:
       - ../mock_banking_system:/scan-targets/mock_banking_system:ro
+      - ../reference_banking_system:/scan-targets/reference_banking_system:ro
       # Optional additional Windows scan target (read-only):
       # - C:/Projects/TargetBankingSystem:/scan-targets/target-system:ro
     healthcheck:

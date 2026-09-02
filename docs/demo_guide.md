@@ -191,7 +191,38 @@ today always gracefully falls back to local, with a clear on-screen explanation 
 this tab never changes the Findings/Domain Scores/Control Evaluations/Governance tabs' numbers —
 only the audit trail grows, by one `agent_action` event per action.
 
+## 15. Run the second scenario: the well-governed Reference Banking System
+
+Back at step 6 ("1. Select Source and Run Assessment"), choose **"Reference Banking System
+(well-governed demo)"** instead of the mock system and click **Run Full Assessment** again —
+this starts a second, independent assessment; it does not replace the one above. See
+`docs/reference_banking_system_findings.md` for the full, actually-executed inventory. This
+scenario exists to show the direct opposite outcome, on the same platform:
+
+- **Same four domains, opposite result.** `application_security`, `infrastructure_api_security`,
+  `payments`, and `core_banking` all score `critical_risk`/`high_risk` in the mock system above
+  — all four score `acceptable` here, because the source code in this fixture actually follows
+  the platform's own control catalog (parameterized queries, no wildcard IAM, review-trail calls
+  present on sensitive operations), not because anything was hidden from the scanner.
+- **`model_ai_governance` is evaluated for the first time.** Step 13 showed this domain as
+  `insufficient_evidence` because the mock system deliberately never touches it. Here, one real
+  file maps to it and produces zero findings — `acceptable`, weighted 100.0. Open the **Domain
+  Scores** tab and compare the two scan results side by side.
+- **Finalization is immediately available.** Open the **Governance** tab — the banner reads
+  **"This assessment CAN be finalized"** right away, with no review required, because no domain
+  scored `high_risk`/`critical_risk`. Contrast this against step 9's blocked banner. One finding
+  (`CFG-008`, low severity) is still available to review if you want to demonstrate the review
+  flow anyway — it just isn't required to unblock finalization here.
+- **The other 11 domains still correctly show `insufficient_evidence`.** This is a small,
+  focused fixture, not a system that was silently declared clean everywhere — the platform's
+  core correctness guarantee (step 13) applies here too.
+
+`reference_banking_system/` is a separate, additive fixture — it never modifies, replaces, or
+reduces `mock_banking_system/`, and both remain independently selectable from the same UI.
+
 ## Expected results reference
+
+### Mock Banking System (the primary, flawed-legacy-system scenario)
 
 | Metric | Expected value |
 |---|---|
@@ -207,3 +238,19 @@ only the audit trail grows, by one `agent_action` event per action.
 If any of these numbers differ from what you observe, run
 `pytest tests/unit/test_mock_banking_fixture.py -v` first — it will tell you precisely which
 number changed and on which file, rather than requiring you to eyeball a full scan output.
+
+### Reference Banking System (the second, well-governed scenario)
+
+| Metric | Expected value |
+|---|---|
+| Total findings | 1 |
+| Severity breakdown | low=1 |
+| Domains evaluated | 5 of 16 (`application_security`, `core_banking`, `infrastructure_api_security`, `model_ai_governance`, `payments`) |
+| Domain scores | 16 (5 `acceptable`, 11 `insufficient_evidence`) |
+| Control evaluations | 68 (21 satisfied, 1 gap, 46 insufficient_evidence) |
+| Recommendations | 1 |
+| Audit events per assessment run | 4, same baseline as above |
+| Finalization | immediately eligible — no `high_risk`/`critical_risk` domain |
+
+If any of these numbers differ from what you observe, run
+`pytest tests/unit/test_reference_banking_system_fixture.py -v` first, for the same reason.

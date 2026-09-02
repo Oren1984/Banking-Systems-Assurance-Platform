@@ -67,7 +67,7 @@ plausible "roots" for tooling to get confused about.
 | `rag/vectorstores/{chroma_store,pgvector_store,registry}.py` | Vector store contract implementations + factory | Chroma adapted from `RAG-Engineering-Lab`; pgvector net-new against the platform's own contract |
 | `providers/{base,registry,openai_adapter,gemini_adapter,claude_adapter}.py` | Disabled-by-default external provider boundary | Net-new, pattern seeded by `RAG-Engineering-Lab`'s embedding providers |
 | `storage/db/{base,session}.py` + `alembic.ini` + `alembic/env.py` | SQLAlchemy foundation + Alembic wiring, no domain tables yet | Adapted from `ai-project-control-tower/app/db/*` |
-| `app/main.py` | FastAPI app with a `/health` endpoint | Net-new (minimal) |
+| `app/main.py` | FastAPI app with a `/health` endpoint — **not served in the actual deployment** (Streamlit is the only process started by `deployment/docker-entrypoint.sh`); tested via `TestClient` only, see `app/README.md` | Net-new (minimal) |
 | `scripts/seed_mock_banking_demo.py` | Documented Phase 5 interface placeholder | Net-new |
 | `mock_banking_system/` | Directory scaffold + README | Net-new |
 | `deployment/docker-compose.yml` | PostgreSQL/pgvector service only | Adapted from `ai-project-control-tower/docker-compose.yml` |

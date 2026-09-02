@@ -1,0 +1,7 @@
+# Shell scripts must keep LF line endings regardless of local core.autocrlf
+# settings — deployment/docker-entrypoint.sh is invoked directly by /bin/sh
+# inside a Linux container; CRLF line endings break `set -eu` parsing
+# ("Illegal option -") and block application startup entirely on a Windows
+# checkout with core.autocrlf=true. Found and fixed during POC/MVP runtime
+# validation.
+*.sh text eol=lf

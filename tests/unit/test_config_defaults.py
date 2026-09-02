@@ -102,3 +102,15 @@ def test_mock_banking_system_path_discovers_fixture_under_allowed_repo_root(tmp_
     fixture.mkdir()
     s = Settings(_env_file=None, allowed_scan_paths=[str(tmp_path)])
     assert s.mock_banking_system_path == str(fixture)
+
+
+def test_reference_banking_system_path_uses_exact_allowlisted_fixture_path():
+    s = Settings(_env_file=None, allowed_scan_paths=["/scan-targets/reference_banking_system"])
+    assert s.reference_banking_system_path == "/scan-targets/reference_banking_system"
+
+
+def test_reference_banking_system_path_discovers_fixture_under_allowed_repo_root(tmp_path):
+    fixture = tmp_path / "reference_banking_system"
+    fixture.mkdir()
+    s = Settings(_env_file=None, allowed_scan_paths=[str(tmp_path)])
+    assert s.reference_banking_system_path == str(fixture)

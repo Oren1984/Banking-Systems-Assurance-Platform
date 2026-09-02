@@ -6,12 +6,17 @@ import ui.services.agent_ui_service as agent_svc
 import ui.services.assessment_service as svc
 from core.config import get_settings
 from core.domains import get_domain_label
+from core.logging import get_logger
 from governance.approval_workflow import FinalizationCheckResult
+from governance.report_sanitizer import sanitize_report
 from models.enums import DecisionCategory, HumanReviewStatus
 from reporting.scan_report_exporter import to_json as to_scan_json
 from reporting.scan_report_exporter import to_markdown as to_scan_markdown
 from scanners.scan_orchestrator import run_scan
 from scanners.source_ingestion import ingest_local_directory, ingest_zip_archive
+from storage.db.session import check_database_connectivity
+
+_logger = get_logger(__name__)
 
 # Phase 5 — End-to-end demonstration UI
 # (BANKING_PLATFORM_INTEGRATION_PLAN.md §13 Phase 5: "Extend the existing
@@ -42,17 +47,105 @@ from scanners.source_ingestion import ingest_local_directory, ingest_zip_archive
 st.set_page_config(page_title="Banking Systems Assurance Platform", layout="wide")
 
 
+def _operation_failed_message(action: str, exc: Exception) -> str:
+    """Log the full (sanitized) exception for operators and return a
+    generic, non-leaking message for the UI. Raw exception text is never
+    shown to the viewer — it can incidentally include internal paths, DB
+    connection details, or library internals, and this UI has no
+    authentication gate. Reuses governance/report_sanitizer.py's masking
+    (secrets/PII patterns) rather than a second implementation."""
+    _logger.error(
+        "ui_operation_failed",
+        action=action,
+        error_type=type(exc).__name__,
+        error=sanitize_report(str(exc)),
+    )
+    return f"{action} — see application logs for details."
+
+
+@st.cache_data(ttl=15, show_spinner=False)
+def _cached_database_status(database_url: str | None) -> bool:
+    """Cached for 15s so the connectivity probe in the status banner does not
+    run a fresh network round-trip on every Streamlit rerun (every widget
+    interaction reruns this whole script)."""
+    return check_database_connectivity(database_url)
+
+
 def _status_banner(settings) -> None:
     cols = st.columns(5)
     cols[0].metric("Mode", "READ-ONLY")
     cols[1].metric("Local-only", "YES" if settings.local_only_mode else "NO")
     cols[2].metric("External providers", "DISABLED" if not settings.external_providers_enabled else "ENABLED")
     cols[3].metric("Vector backend", settings.vector_backend)
-    cols[4].metric("Database configured", "YES" if settings.database_url else "NO")
+    if not settings.database_url:
+        db_status = "NOT CONFIGURED"
+    elif _cached_database_status(settings.database_url):
+        db_status = "CONNECTED"
+    else:
+        db_status = "UNREACHABLE"
+    cols[4].metric("Database", db_status)
+
+
+def _help_section() -> None:
+    """Compact in-app Help / System Information panel. Summarizes (does not
+    replace) docs/security_boundaries.md, docs/architecture.md, and
+    README.md — kept here so someone using the running app, not just the
+    repository, can see what this platform is, its POC/MVP boundaries, and
+    what Production would additionally require, without leaving the UI."""
+    with st.sidebar.expander("Help / System Information", expanded=False):
+        st.markdown(
+            "**What this is**\n"
+            "A read-only assessment/governance tool for banking-adjacent codebases — it scans "
+            "an approved local source, maps findings to banking-domain controls, scores risk, "
+            "and supports human governance review. **It is not a banking transaction system** "
+            "and holds no customer accounts, balances, or payment functionality.\n\n"
+            "**Primary workflow**\n"
+            "Select a source → run a Full Assessment (ingest → scan → score → control "
+            "evaluation) → review findings and domain scores → governance review/override with "
+            "a reason → export a sanitized report. See `docs/demo_guide.md` for a full "
+            "walkthrough.\n\n"
+            "**Security and privacy boundaries (implemented today)**\n"
+            "- Scanning is strictly read-only; source-integrity hashing verifies nothing was "
+            "modified.\n"
+            "- Secrets and PII in scan output are masked before storage/display (regex-based, "
+            "documented as non-exhaustive).\n"
+            "- Recommendations are advisory only — this platform never auto-remediates a "
+            "scanned system.\n"
+            "- The optional AI Assistant tab defaults to a local, non-network mode; an external "
+            "provider is off unless explicitly configured, and its use is clearly labeled.\n"
+            "- The audit trail is append-only, but the reviewer/actor identity recorded in it "
+            "is **self-typed and not authenticated** (see below).\n\n"
+            "**Known limitations (this POC/MVP)**\n"
+            "- No authentication, login, or session management — anyone who can reach this app "
+            "can perform every action.\n"
+            "- No roles or access control — every user can review findings, override scores, "
+            "and use the AI assistant identically.\n"
+            "- Governance actor/reviewer identity is an unverified free-text field, not a "
+            "verified or session-bound identity.\n"
+            "- PII/secret detection is pattern-based and explicitly not exhaustive.\n"
+            "- No production-grade monitoring/alerting stack; this is a single-operator local "
+            "demo, not a hosted service.\n\n"
+            "**Deployment assumption**\n"
+            "Designed to run locally (Docker Compose or a local Python environment) for a "
+            "single operator, on a trusted machine/network — see `README.md` and "
+            "`docs/PROJECT_RUNBOOK.md`.\n\n"
+            "**Would be mandatory before any Production use** (not implemented here — see "
+            "`docs/security_boundaries.md`)\n"
+            "- Real authentication with secure login/logout and verified user identity.\n"
+            "- Role separation / RBAC for governance actions.\n"
+            "- Session management with server-side, tamper-resistant identity.\n"
+            "- Audit events bound to a verified identity, not free text.\n"
+            "- MFA/SSO integration as applicable to the deployment environment.\n"
+            "- Production-grade monitoring, alerting, and secrets management.\n"
+            "- Deployment hardening (network isolation, TLS termination, secrets rotation).\n\n"
+            "**This is a portfolio-grade POC/MVP.** It demonstrates an assurance workflow, "
+            "not a production-ready or regulation-compliant system."
+        )
 
 
 def main() -> None:
     settings = get_settings()
+    _help_section()
 
     st.title("Banking Systems Assurance Platform")
     st.caption(
@@ -140,7 +233,14 @@ def _full_assessment_mode(settings) -> None:
 
 def _run_assessment_section(settings) -> None:
     source_kind = st.radio(
-        "Source", ["Mock Banking System (demo)", "Custom local directory", "Custom ZIP archive"], horizontal=True
+        "Source",
+        [
+            "Mock Banking System (demo)",
+            "Reference Banking System (well-governed demo)",
+            "Custom local directory",
+            "Custom ZIP archive",
+        ],
+        horizontal=True,
     )
     if source_kind == "Mock Banking System (demo)":
         source_path = settings.mock_banking_system_path
@@ -148,6 +248,14 @@ def _run_assessment_section(settings) -> None:
         st.caption(
             "See `mock_banking_system/README.md` and `docs/mock_banking_planted_findings.md` "
             f"for what this fixture contains and exactly what results to expect. Source path: `{source_path}`."
+        )
+    elif source_kind == "Reference Banking System (well-governed demo)":
+        source_path = settings.reference_banking_system_path
+        is_archive = False
+        st.caption(
+            "A second, small, deliberately well-governed fixture — contrast this against the "
+            "Mock Banking System result above. See `reference_banking_system/README.md` and "
+            f"`docs/reference_banking_system_findings.md`. Source path: `{source_path}`."
         )
     else:
         source_path = st.text_input("Path (must be inside an ALLOWED_SCAN_PATHS entry)")
@@ -160,7 +268,7 @@ def _run_assessment_section(settings) -> None:
                 st.session_state["current_scan_id"] = result.scan_id
                 st.success(f"Assessment complete — scan_id `{result.scan_id}`")
             except Exception as exc:  # noqa: BLE001 — surface any failure to the operator, not a crash
-                st.error(f"Assessment could not be completed: {exc}")
+                st.error(_operation_failed_message("Assessment could not be completed", exc))
 
 
 def _scan_picker_section(settings) -> None:
@@ -293,7 +401,14 @@ def _governance_tab(settings, result) -> None:
             "Decision",
             [HumanReviewStatus.APPROVED.value, HumanReviewStatus.REJECTED.value, HumanReviewStatus.OVERRIDDEN.value],
         )
-        reviewer = st.text_input("Reviewer identity", value="demo-reviewer@example.com", key="review_reviewer")
+        reviewer = st.text_input(
+            "Reviewer identity (unverified demo entry — not authenticated)",
+            value="demo-reviewer@example.com",
+            key="review_reviewer",
+            help="This platform has no login/authentication. This value is recorded in the "
+            "audit trail as typed, with no identity verification. See Help / System "
+            "Information for what Production would require.",
+        )
         reason = st.text_area("Reviewer comment / reason (required for 'overridden')", key="review_reason")
         if st.button("Submit review"):
             try:
@@ -301,7 +416,7 @@ def _governance_tab(settings, result) -> None:
                 st.success("Review recorded — recorded in the append-only audit trail.")
                 st.rerun()
             except Exception as exc:  # noqa: BLE001
-                st.error(f"Could not record review: {exc}")
+                st.error(_operation_failed_message("Could not record review", exc))
 
     st.subheader("Override a domain score")
     scores = svc.get_scores(settings, scan_id)
@@ -309,7 +424,14 @@ def _governance_tab(settings, result) -> None:
     score_choice = st.selectbox("Domain score", list(score_options.keys()), key="override_score_choice")
     chosen_score = score_options[score_choice]
     new_category = st.selectbox("New decision category", [c.value for c in DecisionCategory], key="override_category")
-    override_reviewer = st.text_input("Reviewer identity", value="demo-reviewer@example.com", key="override_reviewer")
+    override_reviewer = st.text_input(
+        "Reviewer identity (unverified demo entry — not authenticated)",
+        value="demo-reviewer@example.com",
+        key="override_reviewer",
+        help="This platform has no login/authentication. This value is recorded in the "
+        "audit trail as typed, with no identity verification. See Help / System "
+        "Information for what Production would require.",
+    )
     override_reason = st.text_area("Justification (required)", key="override_reason")
     if st.button("Submit override"):
         if not override_reason.strip():
@@ -330,9 +452,14 @@ def _governance_tab(settings, result) -> None:
                 )
                 st.rerun()
             except Exception as exc:  # noqa: BLE001
-                st.error(f"Could not record override: {exc}")
+                st.error(_operation_failed_message("Could not record override", exc))
 
     st.subheader("Audit trail")
+    st.caption(
+        "The `actor` on each event below is the unverified identity typed into this demo's "
+        "reviewer/user fields — this platform has no authentication, so it is not a "
+        "cryptographically verified or session-bound identity. See Help / System Information."
+    )
     events = svc.get_audit_trail(settings, scan_id)
     for e in events:
         st.write(f"- `{e.created_at}` [{e.event_type}] ({e.actor}): {e.summary}")
@@ -379,7 +506,13 @@ def _agent_tab(settings, result) -> None:
             for w in status["warnings"]:
                 st.write(f"- {w}")
 
-    triggered_by = st.text_input("Your identity (for the audit trail)", value="demo-user@example.com", key="agent_user")
+    triggered_by = st.text_input(
+        "Your identity (unverified demo entry — not authenticated, for the audit trail)",
+        value="demo-user@example.com",
+        key="agent_user",
+        help="This platform has no login/authentication. This value is recorded in the "
+        "audit trail as typed, with no identity verification.",
+    )
 
     st.divider()
     st.markdown("**Explain a finding**")
@@ -409,7 +542,7 @@ def _agent_tab(settings, result) -> None:
             response = agent_svc.answer_question(settings, scan_id, question, triggered_by)
             _render_agent_response(response)
         except Exception as exc:  # noqa: BLE001 — a rejected/unsafe question must not crash the UI
-            st.error(f"Question could not be processed: {exc}")
+            st.error(_operation_failed_message("Question could not be processed", exc))
 
     st.divider()
     st.markdown("**Generate an executive narrative**")
@@ -492,7 +625,7 @@ def _quick_scan_tab(settings) -> None:
                     source.cleanup()
             except Exception as exc:  # noqa: BLE001
                 st.session_state["scan_result"] = None
-                st.error(f"Scan could not be completed: {exc}")
+                st.error(_operation_failed_message("Scan could not be completed", exc))
 
     result = st.session_state["scan_result"]
     if result is None:

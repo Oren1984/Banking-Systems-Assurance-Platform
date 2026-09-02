@@ -51,6 +51,36 @@ The platform exists to provide a structured, auditable, and practical assurance 
 - Read-only scanning only.
 - No automatic remediation of scanned systems.
 - No claim of legal or regulatory compliance from automated checks alone.
+- **No authentication, authorization, or role separation of any kind.** Anyone who can reach
+  the running app can perform every action, including governance review and score overrides.
+  The reviewer/actor identity recorded in the audit trail is a self-typed, unverified value —
+  not a login-backed identity. This is a deliberate POC/MVP boundary, not an oversight; see
+  "Current Implementation vs. Production Requirements" below and `docs/security_boundaries.md`.
+
+## Current Implementation vs. Production Requirements
+
+This is a local, single-operator portfolio POC/MVP. The table below distinguishes what exists
+today from what is intentionally out of scope and what a real Production deployment would
+additionally require. See the in-app **Help / System Information** panel (sidebar) for the
+same summary while running the app.
+
+| Area | Implemented in this POC/MVP | Would be mandatory before Production |
+|---|---|---|
+| Read-only scanning, source-integrity verification | Yes | — |
+| Secret masking / PII redaction in findings and reports | Yes (regex-based, documented non-exhaustive) | Broader, maintained detection coverage |
+| Governance review, score overrides, append-only audit trail | Yes | Audit events bound to a verified identity, not free text |
+| Reviewer/actor identity | Self-typed, unverified text field | Authenticated, session-bound identity |
+| Authentication / login / logout | **Not implemented** | Real authentication with verified credentials |
+| Roles / RBAC / access control | **Not implemented** | Role separation for governance actions (e.g. viewer vs. reviewer) |
+| Session management | **Not implemented** | Server-side, tamper-resistant session/identity binding |
+| MFA / SSO | **Not implemented** | As applicable to the deployment environment |
+| Monitoring / observability | Basic in-app status indicators only (mode, DB connectivity) | Production-grade monitoring, alerting, log aggregation |
+| Secrets management | `.env`-based, local-only | Managed secrets store, rotation |
+| Deployment hardening | Local Docker Compose, non-root container, read-only mounts | Network isolation, TLS termination, hardened deployment pipeline |
+
+None of the "Not implemented" items above are described anywhere in this repository as present
+— if any other document appears to claim otherwise, this table and `docs/security_boundaries.md`
+are authoritative.
 
 ## Architecture (High Level)
 
@@ -166,10 +196,33 @@ DOCKER_ALLOWED_SCAN_PATHS=/scan-targets/mock_banking_system,/scan-targets/target
 - Primary test execution uses `pytest` from repository root.
 - Most tests run without external providers.
 - PostgreSQL integration tests require a configured `DATABASE_URL` and running local database.
+- **Known, non-blocking failures as of the last runtime validation:** 10 unit/security tests
+  pin the mock banking fixture's finding count at 42; this environment currently produces 41
+  (a pre-existing scanner/fixture drift, not caused by or related to any change in this
+  document's "Current Implementation vs. Production Requirements" table). 3 e2e tests fail
+  because the untouched legacy reference repositories (`AI-Project-Scope-Guard/`, etc.) are
+  incomplete in some checkouts. Neither set blocks the POC/MVP demonstration — the application
+  starts, runs a full assessment, and produces correct, internally consistent results end to
+  end; only the specific pinned count differs from the tests' expectation. Do not "fix" these
+  by changing `mock_banking_system/`, scanner logic, or the test expectations themselves
+  without a separate, explicit decision — see `docs/mock_banking_planted_findings.md`.
 
 ## Demo Guidance
 
-Run the platform locally, select "Full Assessment (recommended)", and use the mock banking fixture for a complete deterministic demonstration path.
+Run the platform locally (`docker compose -f deployment/docker-compose.yml up --build`, per
+"Recommended Runtime" above), select "Full Assessment (recommended)", and use the mock banking
+fixture for a complete, deterministic demonstration path — this was manually verified end to
+end (initial load, database connectivity indicator, Quick Scan, Full Assessment, all six tabs,
+governance review/override, audit trail, Help / System Information panel, and both success and
+sanitized-failure UI messages) against a live Docker Compose stack. See
+`docs/security_boundaries.md` for the exact scope of that verification.
+
+A second, small "Reference Banking System (well-governed demo)" source option is also
+selectable from the same "1. Select Source and Run Assessment" screen — it demonstrates the
+same pipeline reaching the opposite outcome (mostly `acceptable`, immediate finalization
+eligibility) on genuinely well-governed source, as a direct contrast to the mock system above.
+See `docs/reference_banking_system_findings.md` and `docs/demo_guide.md` step 15. It is a
+separate, additive fixture; it does not modify or replace the mock banking system.
 
 ## Optional Local Developer Mode
 

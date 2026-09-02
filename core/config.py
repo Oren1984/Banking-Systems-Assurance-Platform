@@ -15,6 +15,7 @@ Environment = Literal["local", "dev", "staging", "prod"]
 # BANKING_PLATFORM_INTEGRATION_PLAN.md §10 finding #4) into the new platform.
 _FORBIDDEN_CREDENTIAL_FRAGMENTS = ("control_tower_pass",)
 _DEFAULT_MOCK_BANKING_SYSTEM_PATH = "mock_banking_system"
+_DEFAULT_REFERENCE_BANKING_SYSTEM_PATH = "reference_banking_system"
 
 
 class Settings(BaseSettings):
@@ -173,6 +174,25 @@ class Settings(BaseSettings):
                 return str(candidate)
 
         return _DEFAULT_MOCK_BANKING_SYSTEM_PATH
+
+    @property
+    def reference_banking_system_path(self) -> str:
+        """Return the configured source path for the built-in, well-governed
+        reference demo (a second, additive fixture — see
+        reference_banking_system/README.md). Mirrors mock_banking_system_path's
+        resolution logic exactly, for the same reasons."""
+        for allowed_path in self.allowed_scan_paths:
+            normalized = allowed_path.replace("\\", "/").rstrip("/")
+            if normalized.endswith("/reference_banking_system") or normalized == _DEFAULT_REFERENCE_BANKING_SYSTEM_PATH:
+                return allowed_path.rstrip("\\/")
+            if normalized.endswith("/scan-targets") or normalized == "/scan-targets":
+                return f"{normalized}/reference_banking_system"
+
+            candidate = Path(allowed_path) / "reference_banking_system"
+            if candidate.exists():
+                return str(candidate)
+
+        return _DEFAULT_REFERENCE_BANKING_SYSTEM_PATH
 
 
 def get_settings() -> Settings:

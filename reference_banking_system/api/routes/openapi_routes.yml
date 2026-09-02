@@ -1,0 +1,18 @@
+# SYNTHETIC REFERENCE BANKING SYSTEM — fake API route exposure config, not real.
+# Deliberate positive example except one intentionally planted low-severity finding — see
+# reference_banking_system/README.md and docs/reference_banking_system_findings.md.
+
+paths:
+  /accounts/{id}:
+    get:
+      summary: Retrieve account details
+      security:
+        - oauth2: []
+  /payments:
+    post:
+      summary: Submit a payment
+      security:
+        - oauth2: []
+
+# Lower-environment diagnostics setting left enabled — expect CFG-008 (LOW).
+display_errors: true

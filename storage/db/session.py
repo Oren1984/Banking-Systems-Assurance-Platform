@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from typing import Iterator
+from typing import Iterator, Optional
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from core.config import Settings
 from core.exceptions import ConfigurationError
+from core.logging import get_logger
+
+_logger = get_logger(__name__)
 
 # Adapted from ai-project-control-tower/app/db/session.py (see
 # BANKING_PLATFORM_INTEGRATION_PLAN.md §3: "Reuse with minor adaptation").
@@ -54,3 +57,33 @@ def get_db(settings: Settings) -> Iterator[Session]:
         yield db
     finally:
         db.close()
+
+
+def check_database_connectivity(database_url: Optional[str], timeout_seconds: float = 2.0) -> bool:
+    """Lightweight, timed connectivity probe for UI status display only.
+
+    Deliberately independent of the module-level cached engine (get_engine):
+    a UI status indicator must never share state with, or perturb, the
+    engine the rest of the application relies on. Returns False on any
+    failure (unset URL, auth failure, network failure, timeout) rather than
+    raising — this is a status signal, not a startup gate. The underlying
+    error is logged (sanitized), never returned to the caller, so it is safe
+    to surface the boolean result directly in an unauthenticated UI.
+    """
+    if not database_url:
+        return False
+    probe_engine = None
+    try:
+        connect_args = {}
+        if database_url.startswith("postgresql"):
+            connect_args["connect_timeout"] = max(1, int(timeout_seconds))
+        probe_engine = create_engine(database_url, connect_args=connect_args)
+        with probe_engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+        return True
+    except Exception as exc:  # noqa: BLE001 — a probe failure is a status result, not a crash
+        _logger.warning("database_connectivity_probe_failed", error=str(exc.__class__.__name__))
+        return False
+    finally:
+        if probe_engine is not None:
+            probe_engine.dispose()

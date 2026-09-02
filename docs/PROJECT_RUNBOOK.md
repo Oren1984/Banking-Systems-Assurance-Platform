@@ -33,7 +33,7 @@ POSTGRES_USER=<your_user>
 POSTGRES_PASSWORD=<your_password>
 POSTGRES_DB=<your_db>
 DATABASE_URL=postgresql://<your_user>:<your_password>@localhost:5434/<your_db>
-ALLOWED_SCAN_PATHS=mock_banking_system,C:\path\to\other\allowed\target
+ALLOWED_SCAN_PATHS=mock_banking_system,reference_banking_system,C:\path\to\other\allowed\target
 ```
 
 Notes:
@@ -208,6 +208,23 @@ Symptom:
 Fix:
 - Confirm target path is included in `ALLOWED_SCAN_PATHS`.
 - Ensure comma-separated format and valid paths.
+
+### F. `app` container exits immediately with `deployment/docker-entrypoint.sh: 2: set: Illegal option -`
+
+Symptom:
+- `docker compose -f deployment/docker-compose.yml logs app` shows this error and the container
+  never reaches Streamlit startup.
+
+Cause:
+- `deployment/docker-entrypoint.sh` was checked out with CRLF line endings (common on Windows
+  with `core.autocrlf=true`); `/bin/sh` inside the Linux container cannot parse `set -eu` with a
+  trailing `\r`. Fixed in this repository (the file is committed with LF endings and
+  `.gitattributes` pins `*.sh text eol=lf` to prevent recurrence) — found and fixed during a
+  POC/MVP runtime validation pass.
+
+Fix (only needed if this recurs, e.g. from a manual edit that reintroduces CRLF):
+- Re-normalize the file to LF line endings and rebuild: `docker compose -f
+  deployment/docker-compose.yml up --build -d`.
 
 ## 14. Recovery Steps
 
