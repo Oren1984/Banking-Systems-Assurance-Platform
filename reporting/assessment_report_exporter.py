@@ -31,7 +31,7 @@ from governance.report_sanitizer import sanitize_report
 _GOVERNANCE_DISCLAIMERS = [
     "This report is not a banking regulatory or compliance certification. Controls evaluated "
     "here are illustrative, engineering-derived technical checks, not citations to any specific "
-    "regulation or standard (see knowledge_base/controls/README.md).",
+    "regulation or standard (see docs/SECURITY.md).",
     "All findings default to a pending human-review status. A domain scored high_risk or "
     "critical_risk with any pending finding blocks this assessment from being finalized — see "
     "the Human Review Status section below.",

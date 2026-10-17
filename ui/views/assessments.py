@@ -41,7 +41,7 @@ if ctx.can(principal, Permission.RUN_ASSESSMENT):
             source_path, is_archive = ctx.settings.reference_banking_system_path, False
             st.caption(
                 "A small, deliberately well-governed fixture to contrast with the mock system. "
-                f"See `reference_banking_system/README.md`. Source path: `{source_path}`."
+                f"See `README.md`. Source path: `{source_path}`."
             )
         else:
             source_path = st.text_input("Path (must be inside an ALLOWED_SCAN_PATHS entry)", key="run_custom_path")

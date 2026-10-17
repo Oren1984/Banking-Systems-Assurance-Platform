@@ -217,7 +217,7 @@ class Settings(BaseSettings):
     def reference_banking_system_path(self) -> str:
         """Return the configured source path for the built-in, well-governed
         reference demo (a second, additive fixture — see
-        reference_banking_system/README.md). Mirrors mock_banking_system_path's
+        README.md). Mirrors mock_banking_system_path's
         resolution logic exactly, for the same reasons."""
         for allowed_path in self.allowed_scan_paths:
             normalized = allowed_path.replace("\\", "/").rstrip("/")

@@ -11,9 +11,8 @@ from scanners.source_ingestion import ingest_local_directory
 # the second, well-governed demo fixture. Mirrors
 # tests/unit/test_mock_banking_fixture.py's own pattern and rationale:
 # every number asserted here was captured by actually running the real
-# scanner/assessment pipeline against this exact fixture (see
-# docs/reference_banking_system_findings.md, the authoritative record), not
-# predicted by hand. This file does not touch mock_banking_system/ or any
+# scanner/assessment pipeline against this exact fixture (this file is the
+# authoritative record), not predicted by hand. This file does not touch mock_banking_system/ or any
 # of its own pinned tests.
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -51,7 +50,7 @@ def test_scanning_the_reference_system_produces_exactly_one_finding(tmp_path):
     result = _scan(tmp_path)
     assert result.summary.total_findings == 1
     assert result.summary.integrity_verified is True
-    assert result.summary.files_scanned == 11
+    assert result.summary.files_scanned == 10
 
 
 def test_scanning_the_reference_system_severity_distribution(tmp_path):
@@ -148,8 +147,8 @@ def test_scanning_the_reference_system_never_modifies_it(tmp_path):
 
 def test_mock_banking_system_is_untouched_by_this_fixtures_existence():
     # This new fixture must never be nested inside, or otherwise alter,
-    # mock_banking_system/ — see reference_banking_system/README.md's "Hard
-    # rules". A cheap, direct structural guard.
+    # mock_banking_system/ (see docs/SECURITY.md on the synthetic fixtures).
+    # A cheap, direct structural guard.
     mock_system_path = REPO_ROOT / "mock_banking_system"
     assert not str(REFERENCE_SYSTEM_PATH).startswith(str(mock_system_path))
     assert not str(mock_system_path).startswith(str(REFERENCE_SYSTEM_PATH))

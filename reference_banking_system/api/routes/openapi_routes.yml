@@ -1,6 +1,6 @@
 # SYNTHETIC REFERENCE BANKING SYSTEM — fake API route exposure config, not real.
 # Deliberate positive example except one intentionally planted low-severity finding — see
-# reference_banking_system/README.md and docs/reference_banking_system_findings.md.
+# tests/unit/test_reference_banking_system_fixture.py.
 
 paths:
   /accounts/{id}:
