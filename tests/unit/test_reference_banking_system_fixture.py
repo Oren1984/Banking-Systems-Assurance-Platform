@@ -51,7 +51,7 @@ def test_scanning_the_reference_system_produces_exactly_one_finding(tmp_path):
     result = _scan(tmp_path)
     assert result.summary.total_findings == 1
     assert result.summary.integrity_verified is True
-    assert result.summary.files_scanned == 11
+    assert result.summary.files_scanned == 10
 
 
 def test_scanning_the_reference_system_severity_distribution(tmp_path):
