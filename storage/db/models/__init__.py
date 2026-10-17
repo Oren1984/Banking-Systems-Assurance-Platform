@@ -17,6 +17,7 @@ from storage.db.models.recommendation import Recommendation  # noqa: F401
 from storage.db.models.scan import Scan  # noqa: F401
 from storage.db.models.scanner_execution import ScannerExecutionRecord  # noqa: F401
 from storage.db.models.score import Score  # noqa: F401
+from storage.db.models.user import User  # noqa: F401
 
 __all__ = [
     "Scan",
@@ -30,4 +31,5 @@ __all__ = [
     "Score",
     "ControlEvaluation",
     "AuditEvent",
+    "User",
 ]

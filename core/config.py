@@ -135,6 +135,14 @@ class Settings(BaseSettings):
     # growing into a near-full-repository payload.
     agent_max_evidence_items: int = 5
 
+    # --- Authentication / sessions (auth/) -----------------------------------
+    # Idle timeout for an authenticated UI session. Every protected action
+    # re-checks it (auth/auth_service.py::AuthService.validate_session), not
+    # just page loads. Lockout thresholds are fixed policy constants on
+    # AuthService, not configuration.
+    session_idle_timeout_minutes: int = Field(default=30, ge=1, le=24 * 60)
+    password_min_length: int = Field(default=12, ge=8, le=128)
+
     @field_validator("database_url")
     @classmethod
     def _reject_known_insecure_defaults(cls, v: Optional[str]) -> Optional[str]:

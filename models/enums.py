@@ -262,6 +262,42 @@ class AgentActionType(str, Enum):
     EXECUTIVE_SUMMARY = "executive_summary"
 
 
+
+# ---------------------------------------------------------------------------
+# Authentication / RBAC additions (auth/). Appended rather than defined in a
+# second enum module, following the Phase 6 precedent above. Role is the
+# closed set of platform roles; AuthEventType is the closed vocabulary of
+# identity/access events written through the same append-only, sanitized
+# AuditRepository as every governance event (audit_events.event_type stores
+# the .value, exactly like AuditEventType).
+# ---------------------------------------------------------------------------
+
+
+class Role(str, Enum):
+    ADMIN = "admin"
+    MANAGER = "manager"
+    EMPLOYEE = "employee"
+
+
+class AuthEventType(str, Enum):
+    USER_LOGIN = "user_login"
+    USER_LOGIN_FAILED = "user_login_failed"
+    USER_LOCKED_OUT = "user_locked_out"
+    USER_LOGOUT = "user_logout"
+    SESSION_EXPIRED = "session_expired"
+    SESSION_INVALIDATED = "session_invalidated"
+    PASSWORD_CHANGED = "password_changed"
+    USER_CREATED = "user_created"
+    USER_ROLE_CHANGED = "user_role_changed"
+    USER_ACTIVATED = "user_activated"
+    USER_DEACTIVATED = "user_deactivated"
+    USER_PASSWORD_RESET = "user_password_reset"
+    ACCESS_DENIED = "access_denied"
+    ASSESSMENT_REQUESTED = "assessment_requested"
+    QUICK_SCAN_REQUESTED = "quick_scan_requested"
+    REPORT_EXPORTED = "report_exported"
+
+
 __all__ = [
     "Severity",
     "ConfidenceLevel",
@@ -281,4 +317,6 @@ __all__ = [
     "ControlEvaluationStatus",
     "AuditEventType",
     "AgentActionType",
+    "Role",
+    "AuthEventType",
 ]
