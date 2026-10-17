@@ -1,0 +1,38 @@
+# Banking Systems Assurance Platform — Streamlit configuration.
+# Read from the working directory (repo root locally, /app in Docker).
+
+[client]
+# Never show tracebacks to end users; errors are logged (sanitized) instead.
+showErrorDetails = "none"
+toolbarMode = "minimal"
+# Navigation is built by ui/app.py (st.navigation) from the signed-in role.
+showSidebarNavigation = true
+
+[server]
+headless = true
+enableXsrfProtection = true
+enableCORS = true
+# Upload widgets are not used; keep any accidental upload tiny.
+maxUploadSize = 1
+
+[browser]
+gatherUsageStats = false
+
+[theme]
+font = "sans-serif"
+baseRadius = "medium"
+showWidgetBorder = true
+
+[theme.light]
+primaryColor = "#1F4E79"
+backgroundColor = "#F7F9FC"
+secondaryBackgroundColor = "#E9EEF5"
+textColor = "#1B2430"
+borderColor = "#D3DCE8"
+
+[theme.dark]
+primaryColor = "#6FA8DC"
+backgroundColor = "#0F1722"
+secondaryBackgroundColor = "#1A2433"
+textColor = "#E6EDF5"
+borderColor = "#2C3A4F"

@@ -33,4 +33,7 @@ echo "Running Alembic migrations..."
 alembic upgrade head
 
 echo "Starting Streamlit..."
-exec streamlit run ui/streamlit_app.py --server.address=0.0.0.0 --server.port=8501
+# 0.0.0.0 is the address *inside* the container (required for Docker port
+# publishing). Host exposure is limited to localhost by the 127.0.0.1 port
+# binding in deployment/docker-compose.yml.
+exec streamlit run ui/app.py --server.address=0.0.0.0 --server.port=8501

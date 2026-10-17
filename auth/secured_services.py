@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import ui.services.agent_ui_service as agent_svc
 import ui.services.assessment_service as svc
@@ -15,6 +15,7 @@ from reporting.scan_report_exporter import to_markdown as to_scan_markdown
 from scanners.scan_orchestrator import run_scan
 from scanners.source_ingestion import ingest_local_directory, ingest_zip_archive
 from storage.db.models.audit_event import AuditEvent
+from storage.db.models.control import Control
 
 # Thin authorization wrappers around the EXISTING service layer
 # (ui/services/assessment_service.py, agent_ui_service.py,
@@ -99,6 +100,13 @@ class SecuredAssessmentService:
     def check_finalization(self, principal: Principal, scan_id: str):
         self._require(principal, Permission.VIEW_ASSESSMENTS, "view assessments", scan_id)
         return svc.check_finalization(self._settings, scan_id)
+
+    def get_control_catalog(self, principal: Principal) -> Dict[str, Tuple[str, str]]:
+        """{controls.id: (control code, title)} — lets the UI show
+        human-readable control codes instead of row UUIDs."""
+        self._require(principal, Permission.VIEW_ASSESSMENTS, "view assessments")
+        with self._authz.auth_service.session() as session:
+            return {c.id: (c.control_id, c.title) for c in session.query(Control).all()}
 
     def compare_scans(self, principal: Principal, baseline_scan_id: str, current_scan_id: str):
         self._require(principal, Permission.VIEW_ASSESSMENTS, "compare assessments")
