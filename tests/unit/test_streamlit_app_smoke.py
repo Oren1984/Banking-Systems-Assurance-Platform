@@ -26,9 +26,11 @@ from models.enums import Role
 # — the pipeline's 4 system events plus the new ASSESSMENT_REQUESTED event
 # attributing the run to the signed-in user.
 
-APP_PATH = "ui/app.py"
-LEGACY_APP_PATH = "ui/streamlit_app.py"
 REPO_ROOT = Path(__file__).resolve().parents[2]
+# Absolute paths: newer Streamlit releases resolve a relative AppTest path
+# against the calling test file, not the working directory.
+APP_PATH = str(REPO_ROOT / "ui" / "app.py")
+LEGACY_APP_PATH = str(REPO_ROOT / "ui" / "streamlit_app.py")
 MOCK_SYSTEM_PATH = REPO_ROOT / "mock_banking_system"
 PASSWORD = "Ui-Test-Password-2026"
 
