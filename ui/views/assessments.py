@@ -34,14 +34,14 @@ if ctx.can(principal, Permission.RUN_ASSESSMENT):
         if source_kind == SOURCES[0]:
             source_path, is_archive = ctx.settings.mock_banking_system_path, False
             st.caption(
-                "Planted findings — see `docs/mock_banking_planted_findings.md` for the expected results. "
+                "Synthetic system with planted findings (42 expected) — see `mock_banking_system/README.md`. "
                 f"Source path: `{source_path}`."
             )
         elif source_kind == SOURCES[1]:
             source_path, is_archive = ctx.settings.reference_banking_system_path, False
             st.caption(
                 "A small, deliberately well-governed fixture to contrast with the mock system. "
-                f"See `docs/reference_banking_system_findings.md`. Source path: `{source_path}`."
+                f"See `reference_banking_system/README.md`. Source path: `{source_path}`."
             )
         else:
             source_path = st.text_input("Path (must be inside an ALLOWED_SCAN_PATHS entry)", key="run_custom_path")

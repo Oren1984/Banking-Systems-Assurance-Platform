@@ -12,8 +12,8 @@ from ui.shell import run_app
 #
 # The previous single-page, unauthenticated UI (Phase 2 Quick Scan + Phase 5
 # Full Assessment + Phase 6 AI Assistant tabs, with self-typed reviewer
-# names) was retired once the multipage UI reached feature parity; see
-# docs/ui_feature_parity.md for the capability-by-capability mapping. Its
-# source remains in git history (commit 15cfd06 and earlier).
+# names) was retired once the multipage UI reached feature parity (mapping
+# in docs/VERIFICATION.md). Its source remains in git history (commit
+# 15cfd06 and earlier).
 
 run_app()

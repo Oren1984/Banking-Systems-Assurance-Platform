@@ -1,252 +1,145 @@
 # Banking Systems Assurance Platform
 
-## Summary
+## What is it?
 
-The Banking Systems Assurance Platform is a read-only assurance system for banking and high-sensitivity financial environments. It scans approved local targets, maps findings to banking domains and controls, and produces auditable assessment artifacts without modifying scanned systems.
+A local, read-only assurance tool for banking software. It scans a codebase you point it at, maps what it finds to banking domains and controls, scores each domain, and gives a human reviewer a controlled way to approve findings and adjust scores. Every step is recorded in an append-only audit trail.
 
-## Problem It Solves
+It is meant for engineering, security, and assurance teams who need a repeatable, evidence-backed view of how a banking system's code and configuration measure up — without the tool ever changing the system it inspects.
 
-Financial engineering and assurance teams often need a repeatable way to evaluate system implementation against internal controls and architecture expectations while preserving source integrity.
+Main capabilities:
 
-Business problem:
-- Difficult to consistently assess implementation risk across multiple domains.
-- Evidence is fragmented and hard to trace through decision workflows.
-- Governance reviews can become manual and inconsistent.
+- **Read-only scanning** of an allow-listed local directory or ZIP archive, with a before/after hash proving nothing was modified.
+- **Deterministic checks** for exposed secrets, PII, unsafe SQL, insecure configuration, broad permissions, audit gaps, and sensitive logging. Secrets and PII are masked before anything is stored or shown.
+- **Scoring and control evaluation** across 16 banking domains (payments, core banking, identity, credit, fraud, and others) against a built-in catalog of 8 controls.
+- **Human review**: managers approve, reject, or override findings and override domain scores with a written justification. A finalization check blocks sign-off while high-risk findings are still pending.
+- **Comparison** of two runs of the same source: new, resolved, and unchanged findings and domain-score changes.
+- **Reports** in JSON, Markdown, and CSV.
+- **Sign-in with three roles** (Employee, Manager, Admin) enforced on the server.
+- An optional **AI Assistant** that explains existing results. It is advisory only and runs in a local, deterministic mode.
 
-Technical problem:
-- Teams need deterministic, read-only scanning and evidence capture.
-- Findings, control evaluations, and score decisions must remain auditable.
-- Operators need a local workflow that does not require external provider dependency.
+The repository ships two **synthetic** banking systems to scan: `mock_banking_system/`, with deliberately planted problems (42 findings), and `reference_banking_system/`, a small well-governed contrast case. Neither contains real customer data or real credentials.
 
-## What the Platform Does
+## Why does it exist?
 
-- Ingests local directories or ZIP archives for read-only scanning.
-- Maps findings to banking domains and control expectations.
-- Generates findings, recommendations, domain scores, and traceability links.
-- Supports governance review and score overrides with audit trail records.
-- Exports assessment artifacts in JSON, Markdown, and CSV.
+Reviewing banking code for risk is usually manual and hard to repeat: findings live in spreadsheets, the evidence behind them is lost, and nobody can later show who accepted which risk and why. This platform keeps the whole chain together — the evidence, the finding, the score it affected, the person who reviewed it, and the reason — so an assessment can be repeated, compared with the last one, and defended in an audit. Automated checks do the repetitive work; decisions stay with an authorized human.
 
-## Why This Platform Exists
+## How does it work?
 
-The platform exists to provide a structured, auditable, and practical assurance workflow that reduces manual review friction while preserving strict non-remediation boundaries.
+1. A signed-in user picks a source: one of the synthetic systems, or a path inside the configured allow-list.
+2. The source is validated and hashed, then scanned by deterministic rule scanners. Nothing is executed and nothing is written to the source.
+3. Findings (with masked evidence) are mapped to banking domains. Each domain is scored and each control is evaluated.
+4. Everything is stored in PostgreSQL and summarized on the dashboard.
+5. A Manager reviews findings and, if needed, overrides a domain score with a justification. Overrides add a new score row; the original is kept.
+6. Users export reports or compare the run with an earlier one. Every action is attributed to the signed-in user in the audit trail.
 
-## How It Works (High Level)
-
-1. Source ingestion validates allowed paths.
-2. Deterministic scanners produce findings and masked evidence.
-3. Assessment logic evaluates controls and computes domain scores.
-4. Governance workflows support human review and overrides.
-5. Reporting and export functions produce decision-ready artifacts.
-
-## Core Capabilities
-
-- Read-only assessment workflow.
-- Domain-based scoring and decision categorization.
-- Control evaluation and traceability.
-- Governance review with append-only audit events.
-- Optional AI assistant tab for advisory responses.
-
-## Safety Boundaries
-
-- Read-only scanning only.
-- No automatic remediation of scanned systems.
-- No claim of legal or regulatory compliance from automated checks alone.
-- **No authentication, authorization, or role separation of any kind.** Anyone who can reach
-  the running app can perform every action, including governance review and score overrides.
-  The reviewer/actor identity recorded in the audit trail is a self-typed, unverified value —
-  not a login-backed identity. This is a deliberate POC/MVP boundary, not an oversight; see
-  "Current Implementation vs. Production Requirements" below and `docs/security_boundaries.md`.
-
-## Current Implementation vs. Production Requirements
-
-This is a local, single-operator portfolio POC/MVP. The table below distinguishes what exists
-today from what is intentionally out of scope and what a real Production deployment would
-additionally require. See the in-app **Help / System Information** panel (sidebar) for the
-same summary while running the app.
-
-| Area | Implemented in this POC/MVP | Would be mandatory before Production |
-|---|---|---|
-| Read-only scanning, source-integrity verification | Yes | — |
-| Secret masking / PII redaction in findings and reports | Yes (regex-based, documented non-exhaustive) | Broader, maintained detection coverage |
-| Governance review, score overrides, append-only audit trail | Yes | Audit events bound to a verified identity, not free text |
-| Reviewer/actor identity | Self-typed, unverified text field | Authenticated, session-bound identity |
-| Authentication / login / logout | **Not implemented** | Real authentication with verified credentials |
-| Roles / RBAC / access control | **Not implemented** | Role separation for governance actions (e.g. viewer vs. reviewer) |
-| Session management | **Not implemented** | Server-side, tamper-resistant session/identity binding |
-| MFA / SSO | **Not implemented** | As applicable to the deployment environment |
-| Monitoring / observability | Basic in-app status indicators only (mode, DB connectivity) | Production-grade monitoring, alerting, log aggregation |
-| Secrets management | `.env`-based, local-only | Managed secrets store, rotation |
-| Deployment hardening | Local Docker Compose, non-root container, read-only mounts | Network isolation, TLS termination, hardened deployment pipeline |
-
-None of the "Not implemented" items above are described anywhere in this repository as present
-— if any other document appears to claim otherwise, this table and `docs/security_boundaries.md`
-are authoritative.
-
-## Architecture (High Level)
-
-The platform is organized into modular boundaries for scanning, assessment, governance, reporting, and UI orchestration. Streamlit provides the operator interface while core logic remains in service/domain modules.
-
-## Recommended Runtime (Docker Compose)
-
-The primary and recommended run mode is full Docker Compose deployment:
-
-```powershell
-docker compose -f deployment/docker-compose.yml up --build
+```mermaid
+flowchart LR
+    U([Signed-in user]) --> UI[Streamlit UI]
+    UI --> AZ{"Session + role check<br/>(every action)"}
+    AZ -->|run assessment| ING["Ingest allow-listed source<br/>(read-only, hashed)"]
+    ING --> SCN[Rule scanners]
+    SCN --> FND[Findings + masked evidence]
+    FND --> SCO[Domain scores + control evaluations]
+    FND --> DB[(PostgreSQL)]
+    SCO --> DB
+    AZ -->|Manager only| GOV[Review findings / override scores]
+    GOV --> DB
+    DB --> OUT[Dashboard, Compare, Reports]
+    AZ -->|advisory| AI[AI Assistant<br/>local mode]
+    DB -.read-only.-> AI
+    DB --- AUD[(Append-only audit trail)]
 ```
 
-This launches the complete platform through containers:
-- Streamlit application (`app`)
-- PostgreSQL with pgvector (`db`)
-- Automatic Alembic migrations during app startup
-- Python dependencies in the app image
+The AI Assistant only reads stored results and writes an audit entry; it has no path to change a finding, a score, or a review.
 
-Application URL:
+## Quick start
 
-```text
-http://localhost:8501
-```
+**Prerequisites:** Docker Desktop with Docker Compose v2. Run commands from the repository root (examples use PowerShell).
 
-## First-Time Setup
+1. Create the environment file and choose a database password. Compose reads `POSTGRES_PASSWORD` from your shell on every `up`, and the value is fixed when the database volume is first created, so use the same value every time (or store it as a user environment variable):
 
-```powershell
-Copy-Item .env.example .env
-docker compose -f deployment/docker-compose.yml up --build
-```
+   ```powershell
+   Copy-Item .env.example .env
+   $env:POSTGRES_PASSWORD = "choose-a-long-random-value"
+   ```
 
-## Daily Operations
+2. Build and start:
 
-Start in background:
+   ```powershell
+   docker compose -f deployment/docker-compose.yml up -d --build
+   ```
 
-```powershell
-docker compose -f deployment/docker-compose.yml up -d
-```
+   Database migrations run automatically on start. Open <http://localhost:8501>.
 
-Status:
+3. Create the first administrator. There is no default account. Either enter the password interactively:
 
-```powershell
-docker compose -f deployment/docker-compose.yml ps
-```
+   ```powershell
+   docker compose -f deployment/docker-compose.yml exec app python -m scripts.create_admin --username your.name --display-name "Your Name"
+   ```
 
-App logs:
+   or copy `admin.credentials.example` to `admin.credentials` (ignored by Git and Docker), fill it in, and pipe it in:
 
-```powershell
-docker compose -f deployment/docker-compose.yml logs -f app
-```
+   ```powershell
+   Get-Content admin.credentials | docker compose -f deployment/docker-compose.yml exec -T app python -m scripts.create_admin --credentials-file -
+   ```
 
-DB logs:
+4. Sign in as the administrator and add other users under **Administration → Users**. New users get a temporary password and must change it at first sign-in.
 
-```powershell
-docker compose -f deployment/docker-compose.yml logs -f db
-```
+5. Stop without losing data:
 
-Shutdown (preserves DB volume):
+   ```powershell
+   docker compose -f deployment/docker-compose.yml down
+   ```
 
-```powershell
-docker compose -f deployment/docker-compose.yml down
-```
+   Do not add `-v` unless you intend to delete the database.
 
-Full reset (deletes DB data):
+Optional, for demos only: `docker compose -f deployment/docker-compose.yml exec app python -m scripts.seed_demo_users --demo` creates one synthetic account per role with random passwords printed once.
 
-```powershell
-docker compose -f deployment/docker-compose.yml down -v
-```
+More detail: [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-Warning: `down -v` deletes the PostgreSQL named volume and stored database data.
+## Roles
 
-## Read-Only Scan Mounts
+| Capability | Employee | Manager | Admin |
+| --- | :-: | :-: | :-: |
+| View dashboard, assessments, findings, controls, comparisons | ✓ | ✓ | ✓ |
+| Run Full Assessments and Quick Scans | ✓ | ✓ | ✓ |
+| Use the AI Assistant (advisory) | ✓ | ✓ | ✓ |
+| Review findings and override domain scores | — | ✓ | — |
+| Export reports | — | ✓ | ✓ |
+| View the platform audit log | — | ✓ | ✓ |
+| Manage users, view system configuration | — | — | ✓ |
 
-Default approved scan target mount:
+Admins deliberately cannot approve findings or override scores (separation of duties). Permissions are enforced in the service layer, not just hidden in the UI. Details: [docs/SECURITY.md](docs/SECURITY.md).
 
-```yaml
-volumes:
-	- ../mock_banking_system:/scan-targets/mock_banking_system:ro
-```
+## Screenshots
 
-Inside Docker, the app uses container-internal scan paths:
+All screenshots use the synthetic mock banking system and demo accounts.
 
-```env
-DOCKER_ALLOWED_SCAN_PATHS=/scan-targets/mock_banking_system
-```
+![Dashboard with finding counts, domain scores, and severity distribution](docs/images/dashboard.jpg)
+*Dashboard: headline counts, finalization status, and per-domain scores for the active assessment.*
 
-Add another Windows target safely as read-only:
+![Findings table and the masked evidence for one finding](docs/images/findings.jpg)
+*Findings & Evidence: filterable findings with masked evidence and advisory recommendations.*
 
-```yaml
-volumes:
-	- C:/Projects/TargetBankingSystem:/scan-targets/target-system:ro
-```
+![Review Queue showing finalization blockers and the review form](docs/images/review-queue.jpg)
+*Review Queue (Manager): finalization blockers and the review form; the reviewer is always the signed-in user.*
 
-Then set:
+![Comparison of two runs showing one new finding](docs/images/compare.jpg)
+*Compare: an earlier run against a later run of the same source — one new finding, 41 unchanged.*
 
-```env
-DOCKER_ALLOWED_SCAN_PATHS=/scan-targets/mock_banking_system,/scan-targets/target-system
-```
+## Technical overview
 
-## Security Boundaries
+Python 3.11, Streamlit (multipage UI), SQLAlchemy with Alembic migrations, PostgreSQL 16 (pgvector image), Docker Compose. Passwords use the standard library's scrypt; there is no separate API server.
 
-- Scan targets are mounted read-only.
-- The platform does not modify scanned systems.
-- No Docker socket mounting is used.
-- No privileged container mode is used.
-- PostgreSQL exposure remains local development mapping (`5434:5432`).
-- Credentials are provided via `.env`, never hardcoded in Dockerfile or Compose.
-- Recommendations are advisory only; no automatic remediation.
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — components, data flow, storage, AI behavior
+- [docs/OPERATIONS.md](docs/OPERATIONS.md) — configuration, running, users, troubleshooting
+- [docs/SECURITY.md](docs/SECURITY.md) — authentication, permissions, sessions, audit, limitations
+- [docs/VERIFICATION.md](docs/VERIFICATION.md) — how to test, and what was checked
 
-## Testing Summary
+## Limitations
 
-- Primary test execution uses `pytest` from repository root.
-- Most tests run without external providers.
-- PostgreSQL integration tests require a configured `DATABASE_URL` and running local database.
-- **Known, non-blocking failures as of the last runtime validation:** 10 unit/security tests
-  pin the mock banking fixture's finding count at 42; this environment currently produces 41
-  (a pre-existing scanner/fixture drift, not caused by or related to any change in this
-  document's "Current Implementation vs. Production Requirements" table). 3 e2e tests fail
-  because the untouched legacy reference repositories (`AI-Project-Scope-Guard/`, etc.) are
-  incomplete in some checkouts. Neither set blocks the POC/MVP demonstration — the application
-  starts, runs a full assessment, and produces correct, internally consistent results end to
-  end; only the specific pinned count differs from the tests' expectation. Do not "fix" these
-  by changing `mock_banking_system/`, scanner logic, or the test expectations themselves
-  without a separate, explicit decision — see `docs/mock_banking_planted_findings.md`.
-
-## Demo Guidance
-
-Run the platform locally (`docker compose -f deployment/docker-compose.yml up --build`, per
-"Recommended Runtime" above), select "Full Assessment (recommended)", and use the mock banking
-fixture for a complete, deterministic demonstration path — this was manually verified end to
-end (initial load, database connectivity indicator, Quick Scan, Full Assessment, all six tabs,
-governance review/override, audit trail, Help / System Information panel, and both success and
-sanitized-failure UI messages) against a live Docker Compose stack. See
-`docs/security_boundaries.md` for the exact scope of that verification.
-
-A second, small "Reference Banking System (well-governed demo)" source option is also
-selectable from the same "1. Select Source and Run Assessment" screen — it demonstrates the
-same pipeline reaching the opposite outcome (mostly `acceptable`, immediate finalization
-eligibility) on genuinely well-governed source, as a direct contrast to the mock system above.
-See `docs/reference_banking_system_findings.md` and `docs/demo_guide.md` step 15. It is a
-separate, additive fixture; it does not modify or replace the mock banking system.
-
-## Optional Local Developer Mode
-
-Local Python execution remains available as a secondary path for development.
-
-- Use Docker only for `db`.
-- Run Alembic and Streamlit from a local virtual environment.
-- Use local DB URL `localhost:5434`.
-
-See [RUN_COMMANDS.md](RUN_COMMANDS.md) for the exact local developer mode steps.
-
-## Runbook
-
-- [RUN_COMMANDS.md](RUN_COMMANDS.md)
-- [docs/PROJECT_RUNBOOK.md](docs/PROJECT_RUNBOOK.md)
-
-## Documentation
-
-- [`docs/PROJECT_RUNBOOK.md`](docs/PROJECT_RUNBOOK.md) — detailed operations and troubleshooting
-- [`docs/demo_guide.md`](docs/demo_guide.md) — end-to-end demo walkthrough
-- [`docs/security_boundaries.md`](docs/security_boundaries.md) — safety boundaries and safeguards
-- [`docs/architecture.md`](docs/architecture.md) — architecture and module structure
-- [`docs/agent_guide.md`](docs/agent_guide.md) — optional AI assistant boundaries
-
-## Project Ownership
-
-Concept, architecture, implementation, governance design, testing, and validation by Oren Salami.
+- **Local use only.** Both ports are bound to `127.0.0.1` and the UI is served over plain HTTP. Configure HTTPS (for example a TLS-terminating reverse proxy) before allowing access from any other computer or the internet.
+- **No MFA, no SSO.** Accounts are local to the platform.
+- Detection is pattern-based and not exhaustive; results support a review, they do not replace one.
+- The external AI provider adapters are not implemented; the assistant always runs in local mode.
+- This is a portfolio-grade proof of concept. It is not production-ready and makes no claim of regulatory compliance or security certification.

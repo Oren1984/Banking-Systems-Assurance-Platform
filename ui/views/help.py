@@ -6,7 +6,7 @@ from ui.app_context import page_setup
 from ui.components.layout import page_title
 
 # In-app Help / System Information (successor of the legacy sidebar panel).
-# Summarizes README.md and docs/security_boundaries.md; those files are
+# Summarizes README.md and docs/SECURITY.md; those files are
 # authoritative if the two ever differ.
 
 ctx, principal = page_setup(None)
@@ -43,5 +43,5 @@ st.markdown(
     "- PII/secret detection is pattern-based and explicitly not exhaustive.\n"
     "- No production-grade monitoring/alerting stack.\n\n"
     "**This is a portfolio-grade POC/MVP.** It demonstrates an assurance workflow, not a production-ready or "
-    "regulation-compliant system. See `README.md` and `docs/security_boundaries.md`."
+    "regulation-compliant system. See `README.md` and `docs/SECURITY.md`."
 )
