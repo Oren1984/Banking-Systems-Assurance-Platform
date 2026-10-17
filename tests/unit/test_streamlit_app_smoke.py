@@ -95,6 +95,20 @@ def _go(at: AppTest, page: str) -> AppTest:
     return at
 
 
+def _is_unroutable(at: AppTest, page: str) -> bool:
+    """True when `page` cannot be opened in this session. Newer Streamlit
+    AppTest raises for a page that is not registered in st.navigation; older
+    releases render the default page instead. Either outcome means the page
+    is not reachable — callers assert on the fallback page otherwise."""
+    try:
+        at.switch_page(f"views/{page}.py").run()
+    except ValueError as exc:
+        if "Could not find a navigation page" in str(exc):
+            return True
+        raise
+    return False
+
+
 def _run_assessment(at: AppTest) -> AppTest:
     _go(at, "assessments")
     next(b for b in at.button if b.label == "Run Full Assessment").click().run()
@@ -133,7 +147,8 @@ def test_initial_load_shows_only_the_sign_in_screen(app_env, path):
 def test_protected_pages_are_unreachable_without_signing_in(app_env, path):
     at = _new_app(path)
     for page in ("dashboard", "assessments", "review_queue", "users", "audit_log"):
-        _go(at, page)  # not registered without a session -> falls back to sign-in
+        if _is_unroutable(at, page):  # not registered without a session
+            continue
         assert not at.exception
         assert _button_labels(at) == ["Sign in"]
         assert _heading(at) == "" and not at.metric
@@ -218,7 +233,9 @@ def test_temporary_password_forces_a_change_before_anything_else(app_env):
     for page in ("dashboard", "findings", "users"):
         direct = AppTest.from_file(APP_PATH, default_timeout=120)
         direct.session_state["principal"] = pending
-        direct.switch_page(f"views/{page}.py").run()
+        direct.run()  # registers the session's (change-password-only) navigation
+        if _is_unroutable(direct, page):
+            continue
         assert not direct.exception
         assert _heading(direct) == "Change password"
     at = _with_principal(pending)
@@ -264,10 +281,13 @@ HIDDEN = {
 def test_navigation_matches_role(app_env, role):
     at = signed_in(role)
     for page, title in ALL_PAGES.items():
+        if page in HIDDEN[role]:
+            if not _is_unroutable(at, page):
+                assert _heading(at) == "Dashboard", f"{role.value} -> {page} must not be reachable"
+            continue
         _go(at, page)
         assert not at.exception, page
-        expected = "Dashboard" if page in HIDDEN[role] else title
-        assert _heading(at) == expected, f"{role.value} -> {page}"
+        assert _heading(at) == title, f"{role.value} -> {page}"
 
 
 # --------------------------------------------------------------------- #
