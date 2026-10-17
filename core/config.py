@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Annotated, Literal, Optional
+from urllib.parse import quote
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 VectorBackend = Literal["pgvector", "chroma"]
@@ -143,6 +144,21 @@ class Settings(BaseSettings):
     session_idle_timeout_minutes: int = Field(default=30, ge=1, le=24 * 60)
     password_min_length: int = Field(default=12, ge=8, le=128)
 
+    # --- Docker Compose connection settings ----------------------------------
+    # The root .env feeds both the db container and the app container. Inside
+    # the app container, deployment/docker-compose.yml sets DATABASE_URL and
+    # ALLOWED_SCAN_PATHS to "" and POSTGRES_HOST=db; _derive_container_settings
+    # then builds them from these values, so every process in the container
+    # (Streamlit, Alembic, `docker compose exec` scripts) uses the same
+    # credentials the database was created with. Outside Docker, explicit
+    # DATABASE_URL / ALLOWED_SCAN_PATHS values always win.
+    postgres_user: str = "banking_assurance"
+    postgres_password: Optional[str] = None
+    postgres_db: str = "banking_assurance_db"
+    postgres_host: Optional[str] = None
+    postgres_port: int = 5432
+    docker_allowed_scan_paths: Annotated[list[str], NoDecode] = Field(default_factory=list)
+
     @field_validator("database_url")
     @classmethod
     def _reject_known_insecure_defaults(cls, v: Optional[str]) -> Optional[str]:
@@ -156,7 +172,21 @@ class Settings(BaseSettings):
                     )
         return v
 
-    @field_validator("allowed_scan_paths", mode="before")
+    @model_validator(mode="after")
+    def _derive_container_settings(self) -> "Settings":
+        if not self.database_url and self.postgres_host and self.postgres_password:
+            self.database_url = "postgresql://{}:{}@{}:{}/{}".format(
+                quote(self.postgres_user, safe=""),
+                quote(self.postgres_password, safe=""),
+                self.postgres_host,
+                self.postgres_port,
+                quote(self.postgres_db, safe=""),
+            )
+        if not self.allowed_scan_paths and self.postgres_host and self.docker_allowed_scan_paths:
+            self.allowed_scan_paths = list(self.docker_allowed_scan_paths)
+        return self
+
+    @field_validator("allowed_scan_paths", "docker_allowed_scan_paths", mode="before")
     @classmethod
     def _parse_scan_paths(cls, v: object) -> list[str]:
         if v is None or (isinstance(v, str) and not v.strip()):

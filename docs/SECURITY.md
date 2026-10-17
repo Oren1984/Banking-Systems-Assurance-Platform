@@ -65,12 +65,12 @@ The role-to-permission table in `auth/permissions.py` lists each role's permissi
 
 ## Network exposure
 
-Docker publishes the UI (8501) and PostgreSQL (5434) on `127.0.0.1` only. The UI uses plain HTTP and Streamlit's XSRF protection is on. **Before allowing access from any other computer or the internet**, put the app behind HTTPS (a TLS-terminating reverse proxy) and set a strong `POSTGRES_PASSWORD`.
+Docker publishes the UI (host port 8085, container port 8501) and PostgreSQL (5434) on `127.0.0.1` only. The UI uses plain HTTP and Streamlit's XSRF protection is on. **Before allowing access from any other computer or the internet**, put the app behind HTTPS (a TLS-terminating reverse proxy) and set a strong `POSTGRES_PASSWORD`.
 
 ## Known limitations
 
 - No multi-factor authentication and no single sign-on.
 - No TLS in this delivery; local use only.
-- Database credentials come from environment variables, not a secrets manager.
+- Database credentials come from the local `.env` file, not a secrets manager. The shipped placeholder `CHANGE_ME` must be replaced before first start.
 - No production monitoring or alerting; status is limited to in-app indicators and container health checks.
 - Detection rules are pattern-based. The platform supports a review; it does not certify compliance.

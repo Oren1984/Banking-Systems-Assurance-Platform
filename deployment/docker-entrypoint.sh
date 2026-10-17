@@ -1,6 +1,18 @@
 #!/bin/sh
 set -eu
 
+# Connection settings come from the root .env (env_file in
+# deployment/docker-compose.yml) -- the same values the db service uses.
+# core/config.py builds the in-network DATABASE_URL from POSTGRES_* and the
+# scan allow-list from DOCKER_ALLOWED_SCAN_PATHS (see the compose file).
+if [ -z "${POSTGRES_PASSWORD:-}" ]; then
+    echo "POSTGRES_PASSWORD is not set in .env -- see docs/OPERATIONS.md." >&2
+    exit 1
+fi
+if [ "${POSTGRES_PASSWORD}" = "CHANGE_ME" ]; then
+    echo "WARNING: POSTGRES_PASSWORD is still the CHANGE_ME placeholder; set a real value in .env." >&2
+fi
+
 echo "Waiting for PostgreSQL availability..."
 python - <<'PY'
 import os
@@ -9,9 +21,11 @@ import time
 
 import psycopg2
 
-db_url = os.environ.get("DATABASE_URL", "")
+from core.config import get_settings
+
+db_url = get_settings().database_url
 if not db_url:
-    print("DATABASE_URL is not set; cannot run migrations.", file=sys.stderr)
+    print("No database connection configured (DATABASE_URL / POSTGRES_*); cannot run migrations.", file=sys.stderr)
     sys.exit(1)
 
 max_attempts = 30
@@ -22,10 +36,21 @@ for attempt in range(1, max_attempts + 1):
         print(f"PostgreSQL connection succeeded on attempt {attempt}.")
         break
     except Exception as exc:  # pragma: no cover
-        if attempt >= max_attempts:
-            print(f"PostgreSQL did not become available: {exc}", file=sys.stderr)
+        reason = str(exc).strip().splitlines()[0] if str(exc).strip() else type(exc).__name__
+        # A wrong password will not fix itself — stop with a clear message
+        # instead of retrying. (psycopg2's message never contains the password.)
+        if "password authentication failed" in reason:
+            print(
+                f"PostgreSQL rejected the credentials: {reason}\n"
+                "POSTGRES_PASSWORD in .env must match the password the database volume was "
+                "created with. See docs/OPERATIONS.md (Troubleshooting).",
+                file=sys.stderr,
+            )
             sys.exit(1)
-        print(f"Attempt {attempt}/{max_attempts} failed; retrying in 2s...")
+        if attempt >= max_attempts:
+            print(f"PostgreSQL did not become available: {reason}", file=sys.stderr)
+            sys.exit(1)
+        print(f"Attempt {attempt}/{max_attempts} failed ({reason}); retrying in 2s...")
         time.sleep(2)
 PY
 

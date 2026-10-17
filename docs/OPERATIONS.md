@@ -4,14 +4,14 @@ All commands run from the repository root. Examples use PowerShell; Docker Compo
 
 ## Configuration
 
-Settings come from environment variables, read through `core/config.py`. Docker Compose loads the root `.env` file (create it with `Copy-Item .env.example .env`) and then overrides two values for the container:
+Settings come from environment variables, read through `core/config.py`. Both containers load the root `.env` file (create it with `Copy-Item .env.example .env`). Inside the app container, `DATABASE_URL` and `ALLOWED_SCAN_PATHS` are derived from the `POSTGRES_*` and `DOCKER_ALLOWED_SCAN_PATHS` values in that same file, so the app and the database always use the same credentials — including for `docker compose exec` commands.
 
 | Variable | Where it is used | Notes |
 | --- | --- | --- |
-| `POSTGRES_PASSWORD` | `deployment/docker-compose.yml` | Read from your shell on **every** `up`: Compose uses it for the database and to build the app's `DATABASE_URL`. It is fixed when the volume is created, so always use the same value. If it is unset, Compose falls back to the placeholder `CHANGE_ME` and the app cannot connect to an existing database. To persist it: `[Environment]::SetEnvironmentVariable("POSTGRES_PASSWORD", "...", "User")`. The value in `.env` is not used for this. |
-| `POSTGRES_USER`, `POSTGRES_DB` | Compose | Default `banking_assurance` / `banking_assurance_db`. |
-| `DATABASE_URL` | App | Built by Compose for the container. Only needed in `.env` when running outside Docker. |
-| `DOCKER_ALLOWED_SCAN_PATHS` | Compose → `ALLOWED_SCAN_PATHS` | Container paths the scanner may read. Default: the two synthetic systems under `/scan-targets/`. |
+| `POSTGRES_PASSWORD` | db and app (from `.env`) | Set a long random value in `.env` before the first start. PostgreSQL stores it when the volume is created; afterwards `.env` must keep exactly that value. A shell variable of the same name has no effect. The app logs a warning while it is still `CHANGE_ME`. |
+| `POSTGRES_USER`, `POSTGRES_DB` | db and app (from `.env`) | Default `banking_assurance` / `banking_assurance_db`. |
+| `DATABASE_URL` | App outside Docker | Host-side URL (`localhost:5434`). Ignored in the container, which connects to `db:5432`. |
+| `DOCKER_ALLOWED_SCAN_PATHS` | App in Docker | Container paths the scanner may read. Default: the two synthetic systems under `/scan-targets/`. |
 | `ALLOWED_SCAN_PATHS` | App (outside Docker) | Comma-separated. Empty means scanning is refused. |
 | `SESSION_IDLE_TIMEOUT_MINUTES` | App | Default 30. |
 | `PASSWORD_MIN_LENGTH` | App | Default 12. |
@@ -21,14 +21,13 @@ Settings come from environment variables, read through `core/config.py`. Docker 
 ## Running with Docker
 
 ```powershell
-$env:POSTGRES_PASSWORD = "your-password"
 docker compose -f deployment/docker-compose.yml up -d --build   # start (migrations run automatically)
 docker compose -f deployment/docker-compose.yml ps              # status and health
 docker compose -f deployment/docker-compose.yml logs -f app     # application logs
 docker compose -f deployment/docker-compose.yml down            # stop, keep data
 ```
 
-The UI is at <http://localhost:8501>. PostgreSQL is reachable from the host at `localhost:5434`. Both ports are bound to `127.0.0.1` only.
+The UI is at <http://localhost:8085> (Streamlit listens on 8501 inside the container; the health check uses that internal port). PostgreSQL is reachable from the host at `localhost:5434`. Both host ports are bound to `127.0.0.1` only. To use another host port, change the left side of `127.0.0.1:8085:8501` in `deployment/docker-compose.yml`.
 
 `docker compose ... down -v` deletes the database volume and every assessment, review, user, and audit event in it. Use it only to start over on purpose.
 
@@ -96,8 +95,8 @@ Use `python -m streamlit`, not the bare `streamlit` command: it puts the reposit
 | Symptom | Likely cause and fix |
 | --- | --- |
 | `env file ... .env not found` | Create it: `Copy-Item .env.example .env`. |
-| App unhealthy, logs show authentication failed for the database | `POSTGRES_PASSWORD` is unset in this shell or differs from the value the volume was created with. Set the original value and run `up -d` again. |
-| Port 8501 or 5434 already in use, or container name conflict | Another stack is using it. The container names `banking_assurance_app` and `banking_assurance_db` are fixed, so stop the other instance first. |
+| App exits with "PostgreSQL rejected the credentials" | `POSTGRES_PASSWORD` in `.env` differs from the value the volume was created with. Put the original value back in `.env` and run `up -d` again. |
+| Port 8085 or 5434 already in use, or container name conflict | Another stack is using it. The container names `banking_assurance_app` and `banking_assurance_db` are fixed, so stop the other instance first. |
 | "Sign-in failed" for a known account | Wrong password, deactivated account, or a 15-minute lockout after 5 failures. The message is deliberately the same in every case. An admin can reset the password, which also unlocks the account. |
 | Sent back to the sign-in page | Idle timeout, an admin change to your account, or a browser refresh (each browser session signs in separately). |
 | "Assessment failed — see application logs" | Usually the path is outside the allow-list or not mounted into the container. The app log names the cause; the UI shows a generic message on purpose. |

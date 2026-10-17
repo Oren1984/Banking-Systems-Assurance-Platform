@@ -6,6 +6,8 @@
 python -m pytest -q -rs                       # full suite; PostgreSQL-only tests skip without DATABASE_URL
 ```
 
+The settings loader also reads the root `.env`. On a machine where `.env` points at your real database, move it aside while running tests (`Move-Item .env .env.hold`, then back), so no test can reach that database. CI has no `.env`.
+
 PostgreSQL-backed tests run against a **disposable** database (never one whose data you need):
 
 ```powershell
@@ -35,16 +37,18 @@ CI: `.github/workflows/tests.yml` runs `python -m pytest -q -rs` on Python 3.11 
 | Auth migration upgrade → re-run → downgrade on disposable PostgreSQL and SQLite | Passed; existing rows unchanged; only `users` added and removed |
 | Upgrade of a populated pre-auth database (version `15cfd06` in Docker → current code on the same volume) | Migration `a14a5514b9ab → 0004_auth_users` applied on start; content checksums of all 9 existing tables identical before and after |
 | Docker build and health | `app` and `db` healthy; migrations ran on start |
-| Localhost-only exposure | 8501 and 5434 answer on `127.0.0.1`; refused on the Wi-Fi and WSL interfaces |
+| Localhost-only exposure | 8085 (app) and 5434 (db) answer on `127.0.0.1`; refused on the Wi-Fi and WSL interfaces |
 | First admin via `create_admin --credentials-file -` (stdin, from bash and from PowerShell `Get-Content`) | Account created; re-run left it unchanged; `admin.credentials` absent from the image |
 | Demo users via `seed_demo_users` | Refused without `--demo`; created 3 accounts with `--demo` |
 | Browser walkthrough (Chrome, against Docker) | Employee: sign-in, Full Assessment (42 findings / 16 domains / 68 control evaluations / 5 audit events), read-only Review Queue, sign-out. Manager: generic failed-sign-in message, finding approval (42 → 41 pending, attributed to the user), comparison (1 new, 41 unchanged). Admin: Users page, read-only Review Queue, Audit Log |
 | Audit content | No passwords or hashes in any audit summary or payload; every event carries the authenticated actor |
 | Local run outside Docker | `python -m streamlit run ui/app.py` renders the sign-in page |
 | Documentation | Relative links and image paths in all maintained Markdown files resolve; the README Mermaid diagram renders with Mermaid 10.9.1; no credentials or personal email addresses in the docs |
+| Docker startup fix (Compose project `deployment`, existing July volume) | Both containers healthy; app published as `127.0.0.1:8085->8501`; `/_stcore/health` and `/` return 200 on <http://localhost:8085>; sign-in page renders and an admin sign-in shows the existing assessments; migration `a14a5514b9ab → 0004_auth_users` applied; 10 scans / 254 findings / 44 audit events unchanged; `docker compose exec` scripts reach `db:5432` |
 
 ### Found and fixed during verification
 
+- Docker UI unreachable: the app's `DATABASE_URL` was built by Compose interpolation, which never reads the root `.env`, so the app used a different password than the existing database volume and stopped after 30 retries before Streamlit started. Both containers now read the same `.env`, the app derives its connection from it, and a credential mismatch is reported immediately with a clear message. Host port moved to 8085.
 - Header "Sign out" button truncated; admin pages hidden behind Streamlit's "View 4 more"; metric values truncated ("Bloc…"). Fixed and re-checked in the browser.
 - The bare `streamlit run ui/app.py` (outside Docker) fails with `No module named 'ui'`. Documented `python -m streamlit run` instead, which works.
 

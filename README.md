@@ -56,11 +56,11 @@ The AI Assistant only reads stored results and writes an audit entry; it has no 
 
 **Prerequisites:** Docker Desktop with Docker Compose v2. Run commands from the repository root (examples use PowerShell).
 
-1. Create the environment file and choose a database password. Compose reads `POSTGRES_PASSWORD` from your shell on every `up`, and the value is fixed when the database volume is first created, so use the same value every time (or store it as a user environment variable):
+1. Create the environment file, then replace `POSTGRES_PASSWORD=CHANGE_ME` in `.env` with a long random value. Both containers read it from `.env`. The value is fixed when the database volume is first created, so do not change it afterwards:
 
    ```powershell
    Copy-Item .env.example .env
-   $env:POSTGRES_PASSWORD = "choose-a-long-random-value"
+   notepad .env
    ```
 
 2. Build and start:
@@ -69,7 +69,7 @@ The AI Assistant only reads stored results and writes an audit entry; it has no 
    docker compose -f deployment/docker-compose.yml up -d --build
    ```
 
-   Database migrations run automatically on start. Open <http://localhost:8501>.
+   Database migrations run automatically on start. Open <http://localhost:8085> (Streamlit listens on 8501 inside the container).
 
 3. Create the first administrator. There is no default account. Either enter the password interactively:
 

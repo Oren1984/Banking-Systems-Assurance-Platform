@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -42,5 +43,11 @@ def test_env_example_external_providers_disabled_by_default():
 
 
 def test_no_real_dotenv_file_committed():
-    # A real .env must never exist in the repo; only .env.example is allowed.
-    assert not (REPO_ROOT / ".env").exists()
+    # A real .env must never be committed; only .env.example is. A local,
+    # untracked .env is expected — Docker Compose requires it (see README).
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", ".env"], cwd=REPO_ROOT, capture_output=True, text=True
+    )
+    assert tracked.returncode != 0, ".env is tracked by git"
+    ignored = subprocess.run(["git", "check-ignore", "-q", ".env"], cwd=REPO_ROOT)
+    assert ignored.returncode == 0, ".env must be git-ignored"
