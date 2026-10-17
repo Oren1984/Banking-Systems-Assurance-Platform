@@ -7,6 +7,10 @@
 .env
 *.env
 !.env.example
+# Single synthetic scanner fixture (planted fake values only, expected to
+# produce SQL-005) — see docs/mock_banking_planted_findings.md. Exact path
+# only; every other .env file stays ignored.
+!mock_banking_system/config/db_schema_credentials.env
 
 # Python
 __pycache__/
