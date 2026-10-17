@@ -51,12 +51,12 @@ def _sign_out(ctx: AppContext, principal: Principal) -> None:
 
 
 def render_header(ctx: AppContext, principal: Principal) -> None:
-    left, right = st.columns([3, 2], vertical_alignment="center")
+    left, right = st.columns([5, 3], vertical_alignment="center")
     with left:
         st.markdown('<span class="bsap-brand">Banking Systems Assurance Platform</span>', unsafe_allow_html=True)
         st.markdown(" ".join(status_badges(ctx)))
     with right:
-        user_col, btn_col = st.columns([3, 1], vertical_alignment="center")
+        user_col, btn_col = st.columns([3, 2], vertical_alignment="center")
         # display_name is admin-entered free text: HTML-escape it because this
         # line is rendered with unsafe_allow_html (for the muted username).
         user_col.markdown(
@@ -64,7 +64,9 @@ def render_header(ctx: AppContext, principal: Principal) -> None:
             f'<span class="bsap-muted">@{html.escape(principal.username)}</span>',
             unsafe_allow_html=True,
         )
-        btn_col.button("Sign out", key="header_sign_out", on_click=_sign_out, args=(ctx, principal), width="stretch")
+        btn_col.button(
+            "Sign out", key="header_sign_out", icon=":material/logout:", on_click=_sign_out, args=(ctx, principal), width="content"
+        )
     st.divider()
 
 

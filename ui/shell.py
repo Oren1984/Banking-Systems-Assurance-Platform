@@ -76,7 +76,9 @@ def run_app() -> None:
     for section, script, title, icon, permission in PAGES:
         if _allowed(ctx, principal, permission):
             sections.setdefault(section, []).append(st.Page(script, title=title, icon=icon))
-    nav = st.navigation(sections)
+    # expanded=True: Streamlit otherwise folds entries past the 10th behind
+    # "View N more", which hid Administration pages from admins.
+    nav = st.navigation(sections, expanded=True)
     render_sidebar(ctx, principal)
     render_header(ctx, principal)
     show_flash()

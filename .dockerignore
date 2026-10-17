@@ -27,3 +27,7 @@ node_modules
 .claude/
 CLAUDE.md
 .claudeignore
+
+# Local administrator credentials — never copied into the image
+# (piped to scripts/create_admin.py on stdin instead).
+admin.credentials

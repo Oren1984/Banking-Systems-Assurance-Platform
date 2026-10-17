@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import io
 from pathlib import Path
 
 import pytest
@@ -61,6 +62,36 @@ def test_create_admin_rejects_mismatch_and_weak_passwords(settings, capsys):
     assert create_admin_mod.create_admin("first.admin", "", settings, read_password=lambda _: next(answers)) == 1
     assert create_admin_mod.create_admin("first.admin", "", settings, read_password=lambda _: "short") == 1
     assert _users(settings) == {}
+
+
+def test_create_admin_from_credentials_file(settings):
+    content = io.StringIO(
+        "# comment line\nADMIN_USERNAME=File.Admin\nADMIN_DISPLAY_NAME=\"File Admin\"\nADMIN_PASSWORD=File-Based-Pass-2026\n"
+    )
+    assert create_admin_mod.create_admin_from_file(content, settings) == 0
+    user = _users(settings)["file.admin"]
+    assert user.role == "admin" and user.display_name == "File Admin" and not user.must_change_password
+    assert "File-Based-Pass-2026" not in user.password_hash
+    # Re-running is a no-op that leaves the existing account untouched.
+    before = user.password_hash
+    again = io.StringIO("ADMIN_USERNAME=file.admin\nADMIN_PASSWORD=Another-Pass-2026x\n")
+    assert create_admin_mod.create_admin_from_file(again, settings) == 0
+    assert _users(settings)["file.admin"].password_hash == before
+
+
+def test_credentials_file_requires_username_and_password(settings):
+    assert create_admin_mod.create_admin_from_file(io.StringIO("ADMIN_USERNAME=x.admin\n"), settings) == 1
+    assert create_admin_mod.create_admin_from_file(io.StringIO("ADMIN_PASSWORD=x\n"), settings) == 1
+    assert create_admin_mod.create_admin_from_file(io.StringIO("ADMIN_USERNAME=x.admin\nADMIN_PASSWORD=short\n"), settings) == 1
+    assert _users(settings) == {}
+
+
+def test_credentials_file_is_git_and_docker_ignored():
+    root = Path(create_admin_mod.__file__).resolve().parents[1]
+    for ignore_file in (".gitignore", ".dockerignore"):
+        lines = [l.strip() for l in (root / ignore_file).read_text(encoding="utf-8").splitlines()]
+        assert "admin.credentials" in lines, ignore_file
+    assert (root / "admin.credentials.example").exists()
 
 
 def test_create_admin_has_no_password_argument():

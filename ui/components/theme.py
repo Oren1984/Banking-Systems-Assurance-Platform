@@ -19,6 +19,7 @@ _CSS = """
     padding: 0.75rem 1rem;
 }
 [data-testid="stMetricLabel"] p { font-size: 0.82rem; opacity: 0.8; }
+[data-testid="stMetricValue"] { font-size: 1.7rem; }
 [data-testid="stSidebarNav"] { padding-top: 0.5rem; }
 .bsap-brand { font-weight: 700; font-size: 1.05rem; letter-spacing: 0.01em; }
 .bsap-muted { opacity: 0.7; font-size: 0.85rem; }
