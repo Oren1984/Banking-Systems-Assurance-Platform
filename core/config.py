@@ -39,7 +39,7 @@ class Settings(BaseSettings):
 
     # --- Application ---------------------------------------------------
     app_name: str = "Banking Systems Assurance Platform"
-    app_version: str = "0.1.0"
+    app_version: str = "2.0"
     environment: Environment = "local"
     debug: bool = False
     log_level: str = "INFO"

@@ -23,7 +23,7 @@ from core.domains import BankingDomain
 
 app = FastAPI(
     title="Banking Systems Assurance Platform",
-    version="0.1.0",
+    version="2.0",
     description=(
         "Local-first, read-only assurance/governance platform. "
         "Phase 1 foundation build — see BANKING_PLATFORM_INTEGRATION_PLAN.md."

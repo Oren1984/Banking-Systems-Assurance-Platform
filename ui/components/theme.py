@@ -25,6 +25,7 @@ _CSS = """
 .bsap-muted { opacity: 0.7; font-size: 0.85rem; }
 .bsap-login-title { text-align: center; margin-bottom: 0.25rem; }
 .bsap-login-sub { text-align: center; opacity: 0.75; margin-bottom: 1.25rem; }
+.bsap-footer { text-align: center; opacity: 0.7; font-size: 0.8rem; margin-top: 2rem; }
 @media (max-width: 640px) {
     .block-container { padding-left: 1rem; padding-right: 1rem; }
 }

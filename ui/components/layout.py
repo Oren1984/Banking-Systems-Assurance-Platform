@@ -14,7 +14,7 @@ from ui.components.badges import badge, role_badge
 # sign-out, live system status), the sidebar's active-assessment picker,
 # and consistent empty states.
 
-FOOTER = "Designed and developed by Oren Salami"
+DEVELOPER_CREDIT = "Built and developed by Oren Salami"
 
 
 @st.cache_data(ttl=15, show_spinner=False)
@@ -100,10 +100,20 @@ def render_sidebar(ctx: AppContext, principal: Principal) -> None:
             st.caption("No assessments yet.")
 
 
-def render_sidebar_footer() -> None:
+def footer_text(ctx: AppContext) -> str:
+    return f"Version {ctx.settings.app_version} | {DEVELOPER_CREDIT}"
+
+
+def render_sidebar_footer(ctx: AppContext) -> None:
     with st.sidebar:
         st.divider()
-        st.caption(FOOTER)
+        st.caption(footer_text(ctx))
+
+
+def render_page_footer(ctx: AppContext) -> None:
+    # Main-area footer for screens without a sidebar (sign-in, forced
+    # password change).
+    st.markdown(f'<div class="bsap-footer">{html.escape(footer_text(ctx))}</div>', unsafe_allow_html=True)
 
 
 def scan_label(scan) -> str:

@@ -6,7 +6,7 @@ import streamlit as st
 
 from auth.permissions import Permission
 from ui.app_context import get_context, refresh_session, show_flash
-from ui.components.layout import render_header, render_sidebar, render_sidebar_footer
+from ui.components.layout import render_header, render_page_footer, render_sidebar, render_sidebar_footer
 from ui.components.theme import apply_theme
 
 # The authenticated multipage application. Run through either entrypoint —
@@ -65,11 +65,13 @@ def run_app() -> None:
     principal = refresh_session(ctx)
     if principal is None:
         st.navigation([st.Page("views/login.py", title="Sign in", icon=":material/login:")], position="hidden").run()
+        render_page_footer(ctx)
         return
 
     if principal.must_change_password:
         render_header(ctx, principal)
         st.navigation([st.Page("views/account.py", title="Change password")], position="hidden").run()
+        render_page_footer(ctx)
         return
 
     sections: dict = {}
@@ -80,7 +82,8 @@ def run_app() -> None:
     # "View N more", which hid Administration pages from admins.
     nav = st.navigation(sections, expanded=True)
     render_sidebar(ctx, principal)
+    # Before nav.run(): pages that st.stop() would otherwise skip the footer.
+    render_sidebar_footer(ctx)
     render_header(ctx, principal)
     show_flash()
     nav.run()
-    render_sidebar_footer()
